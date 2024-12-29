@@ -1,34 +1,39 @@
 # utils.py
 import logging
+import os
 import platform
 import random
 import socket  # Add this import
 import subprocess
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from . import config
 
 
 def configure_logging():
-    logger = logging.getLogger('remote_access')
-    logger.setLevel(logging.DEBUG)
+    """
+    Configures the logging settings.
+    """
+    logger = logging.getLogger('polaris_cli')
+    logger.setLevel(logging.INFO)
     
-    config.LOG_DIR.mkdir(exist_ok=True)
-    file_handler = logging.FileHandler(config.LOG_DIR / 'remote-access.log')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s]: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    ))
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(
-        "%(message)s"
-    ))
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
     
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
+    # File handler
+    log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polaris.log')
+    fh = logging.FileHandler(log_file)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
     return logger
 
 def run_elevated(cmd):
