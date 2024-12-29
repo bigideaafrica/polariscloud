@@ -4,9 +4,9 @@ import logging
 import os
 import platform
 import re
-import socket
 import subprocess
 import time
+import uuid
 
 import psutil
 import requests
@@ -30,23 +30,6 @@ def get_location():
         return None
 
 def get_cpu_info_windows():
-    c = {
-        "op_modes": None,
-        "address_sizes": None,
-        "byte_order": None,
-        "total_cpus": None,
-        "online_cpus": None,
-        "vendor_id": None,
-        "cpu_name": None,
-        "cpu_family": None,
-        "model": None,
-        "threads_per_core": None,
-        "cores_per_socket": None,
-        "sockets": None,
-        "stepping": None,
-        "cpu_max_mhz": None,
-        "cpu_min_mhz": None
-    }
     try:
         ps_cmd = ["powershell", "-Command", """
             $cpu = Get-CimInstance Win32_Processor | Select-Object *;
@@ -71,84 +54,114 @@ def get_cpu_info_windows():
         r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
         cpu_info = json.loads(r.stdout)
         
-        c["op_modes"] = f"32-bit, 64-bit" if cpu_info.get("DataWidth") == 64 else "32-bit"
-        c["address_sizes"] = f"{cpu_info.get('AddressWidth')} bits"
-        c["byte_order"] = "Little Endian"
-        c["total_cpus"] = int(cpu_info.get("ThreadCount", 0))
-        c["vendor_id"] = cpu_info.get("Manufacturer")
-        c["cpu_name"] = cpu_info.get("Name")
-        c["cpu_family"] = int(cpu_info.get("Family", 0))
-        c["cores_per_socket"] = int(cpu_info.get("NumberOfCores", 0))
-        c["threads_per_core"] = int(cpu_info.get("ThreadCount", 0)) // int(cpu_info.get("NumberOfCores", 1))
-        c["sockets"] = 1
-        c["stepping"] = int(cpu_info.get("Stepping", 0)) if cpu_info.get("Stepping") else None
-        c["cpu_max_mhz"] = float(cpu_info.get("MaxClockSpeed", 0))
-        c["cpu_min_mhz"] = float(cpu_info.get("CurrentClockSpeed", 0))
-
+        return {
+            "op_modes": f"32-bit, 64-bit" if cpu_info.get("DataWidth") == 64 else "32-bit",
+            "address_sizes": f"{cpu_info.get('AddressWidth')} bits",
+            "byte_order": "Little Endian",
+            "total_cpus": int(cpu_info.get("ThreadCount", 0)),
+            "online_cpus": str(list(range(int(cpu_info.get("ThreadCount", 0))))),
+            "vendor_id": cpu_info.get("Manufacturer"),
+            "cpu_name": cpu_info.get("Name"),
+            "cpu_family": int(cpu_info.get("Family", 0)),
+            "model": int(cpu_info.get("ProcessorId", "0")[9:10], 16) if cpu_info.get("ProcessorId") else 0,
+            "threads_per_core": int(cpu_info.get("ThreadCount", 0)) // int(cpu_info.get("NumberOfCores", 1)),
+            "cores_per_socket": int(cpu_info.get("NumberOfCores", 0)),
+            "sockets": 1,
+            "stepping": int(cpu_info.get("Stepping", 0)) if cpu_info.get("Stepping") else None,
+            "cpu_max_mhz": float(cpu_info.get("MaxClockSpeed", 0)),
+            "cpu_min_mhz": float(cpu_info.get("CurrentClockSpeed", 0))
+        }
     except Exception as e:
         logger.error(f"Failed to get Windows CPU info: {e}")
-    return c
+        return None
 
 def get_cpu_info_linux():
-    c = {
-        "op_modes": None,
-        "address_sizes": None,
-        "byte_order": None,
-        "total_cpus": None,
-        "online_cpus": None,
-        "vendor_id": None,
-        "cpu_name": None,
-        "cpu_family": None,
-        "model": None,
-        "threads_per_core": None,
-        "cores_per_socket": None,
-        "sockets": None,
-        "stepping": None,
-        "cpu_max_mhz": None,
-        "cpu_min_mhz": None
-    }
     try:
         r = subprocess.run(["lscpu"], capture_output=True, text=True, check=True)
-        for line in r.stdout.splitlines():
+        lines = r.stdout.splitlines()
+        info = {}
+        
+        for line in lines:
             parts = line.split(":", 1)
-            if len(parts) != 2:
-                continue
-            k = parts[0].strip()
-            v = parts[1].strip()
-            
-            if k == "CPU op-mode(s)":
-                c["op_modes"] = v
-            elif k == "Address sizes":
-                c["address_sizes"] = v
-            elif k == "Byte Order":
-                c["byte_order"] = v
-            elif k == "CPU(s)":
-                c["total_cpus"] = int(v)
-            elif k == "On-line CPU(s) list":
-                c["online_cpus"] = v
-            elif k == "Vendor ID":
-                c["vendor_id"] = v
-            elif k == "Model name":
-                c["cpu_name"] = v
-            elif k == "CPU family":
-                c["cpu_family"] = int(v)
-            elif k == "Model":
-                c["model"] = int(v)
-            elif k == "Thread(s) per core":
-                c["threads_per_core"] = int(v)
-            elif k == "Core(s) per socket":
-                c["cores_per_socket"] = int(v)
-            elif k == "Socket(s)":
-                c["sockets"] = int(v)
-            elif k == "Stepping":
-                c["stepping"] = int(v)
-            elif k == "CPU max MHz":
-                c["cpu_max_mhz"] = float(v)
-            elif k == "CPU min MHz":
-                c["cpu_min_mhz"] = float(v)
+            if len(parts) == 2:
+                info[parts[0].strip()] = parts[1].strip()
+
+        return {
+            "op_modes": info.get("CPU op-mode(s)"),
+            "address_sizes": info.get("Address sizes"),
+            "byte_order": info.get("Byte Order"),
+            "total_cpus": int(info.get("CPU(s)", 0)),
+            "online_cpus": info.get("On-line CPU(s) list", ""),
+            "vendor_id": info.get("Vendor ID"),
+            "cpu_name": info.get("Model name"),
+            "cpu_family": int(info.get("CPU family", 0)),
+            "model": int(info.get("Model", 0)),
+            "threads_per_core": int(info.get("Thread(s) per core", 1)),
+            "cores_per_socket": int(info.get("Core(s) per socket", 1)),
+            "sockets": int(info.get("Socket(s)", 1)),
+            "stepping": int(info.get("Stepping", 0)) if info.get("Stepping") else None,
+            "cpu_max_mhz": float(info.get("CPU max MHz", 0)),
+            "cpu_min_mhz": float(info.get("CPU min MHz", 0))
+        }
     except Exception as e:
         logger.error(f"Failed to get Linux CPU info: {e}")
-    return c
+        return None
+
+def get_gpu_info_windows():
+    try:
+        ps_cmd = ["powershell", "-Command", """
+            $gpu = Get-CimInstance win32_VideoController | Select-Object *;
+            ConvertTo-Json -InputObject $gpu -Depth 10
+        """]
+        r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
+        gpu_info = json.loads(r.stdout)
+        
+        if not isinstance(gpu_info, list):
+            gpu_info = [gpu_info]
+            
+        primary_gpu = gpu_info[0]
+        memory_bytes = int(primary_gpu.get('AdapterRAM', 0))
+        memory_gb = memory_bytes / (1024**3) if memory_bytes > 0 else 0
+        
+        return {
+            "gpu_name": primary_gpu.get('Name'),
+            "memory_size": f"{memory_gb:.2f}GB",
+            "cuda_cores": None,
+            "clock_speed": f"{primary_gpu.get('MaxRefreshRate', 0)}Hz",
+            "power_consumption": None
+        }
+    except Exception as e:
+        logger.error(f"Failed to get GPU info: {e}")
+        return None
+
+def get_gpu_info_linux():
+    try:
+        try:
+            nvidia_cmd = ["nvidia-smi", "--query-gpu=name,memory.total,clocks.max.graphics,power.limit", "--format=csv,noheader,nounits"]
+            r = subprocess.run(nvidia_cmd, capture_output=True, text=True, check=True)
+            gpu_data = r.stdout.strip().split(',')
+            
+            return {
+                "gpu_name": gpu_data[0].strip(),
+                "memory_size": f"{float(gpu_data[1].strip())/1024:.2f}GB",
+                "cuda_cores": None,
+                "clock_speed": f"{gpu_data[2].strip()}MHz",
+                "power_consumption": f"{gpu_data[3].strip()}W"
+            }
+        except:
+            cmd = ["lspci", "-v", "-nn", "|", "grep", "VGA"]
+            r = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+            
+            return {
+                "gpu_name": r.stdout.strip(),
+                "memory_size": "Unknown",
+                "cuda_cores": None,
+                "clock_speed": None,
+                "power_consumption": None
+            }
+    except Exception as e:
+        logger.error(f"Failed to get Linux GPU info: {e}")
+        return None
 
 def get_system_ram_gb():
     try:
@@ -163,8 +176,8 @@ def get_storage_info():
     storage_info = {
         "type": "Unknown",
         "capacity": "0GB",
-        "read_speed": "Unknown",
-        "write_speed": "Unknown"
+        "read_speed": None,
+        "write_speed": None
     }
     
     try:
@@ -176,15 +189,12 @@ def get_storage_info():
             r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
             disk_info = json.loads(r.stdout)
             
-            # Handle both single disk and array response
             if not isinstance(disk_info, list):
                 disk_info = [disk_info]
                 
-            # Get primary disk info
             primary_disk = disk_info[0]
             media_type = primary_disk.get('MediaType', '').lower()
             
-            # Determine storage type and speeds
             if 'ssd' in media_type or 'solid' in media_type:
                 storage_info["type"] = "SSD"
                 storage_info["read_speed"] = "550MB/s"
@@ -198,12 +208,12 @@ def get_storage_info():
                 storage_info["read_speed"] = "150MB/s"
                 storage_info["write_speed"] = "100MB/s"
             
-            # Get capacity
             total_bytes = psutil.disk_usage('/').total
             storage_info["capacity"] = f"{(total_bytes / (1024**3)):.2f}GB"
-
+            
         elif is_linux():
-            r = subprocess.run(["lsblk", "-d", "-o", "NAME,SIZE,ROTA,TRAN"], capture_output=True, text=True, check=True)
+            cmd = ["lsblk", "-d", "-o", "NAME,SIZE,ROTA,TRAN"]
+            r = subprocess.run(cmd, capture_output=True, text=True, check=True)
             lines = r.stdout.splitlines()[1:]  # Skip header
             
             for line in lines:
@@ -212,7 +222,7 @@ def get_storage_info():
                     is_rotational = parts[2] == "1"
                     transport = parts[3] if len(parts) > 3 else ""
                     
-                    if "nvme" in transport:
+                    if "nvme" in transport.lower():
                         storage_info["type"] = "NVME"
                         storage_info["read_speed"] = "3500MB/s"
                         storage_info["write_speed"] = "3000MB/s"
@@ -234,28 +244,96 @@ def get_storage_info():
         
     return storage_info
 
-def get_system_info():
-    """Gather all system information."""
+def get_system_info(resource_type=None):
+    """Gather all system information according to the models."""
     try:
+        # Auto-detect resource type if not specified
+        if resource_type is None:
+            resource_type = "GPU" if has_gpu() else "CPU"
+            logger.info(f"Detected resource type: {resource_type}")
+
         location = get_location()
-        
-        if is_linux():
-            cpu_info = get_cpu_info_linux()
-        else:
-            cpu_info = get_cpu_info_windows()
-            
+        resource_id = str(uuid.uuid4())
         ram = get_system_ram_gb()
         storage = get_storage_info()
-        
+
+        # Base resource without cpu_specs or gpu_specs
+        resource = {
+            "id": resource_id,
+            "resource_type": resource_type.upper(),
+            "location": location,
+            "hourly_price": 0.0,
+            "ram": ram,
+            "storage": storage,
+            "is_active": True
+        }
+
+        # Add the appropriate specs based on resource type
+        if resource_type.upper() == "CPU":
+            resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
+        elif resource_type.upper() == "GPU":
+            resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
+
         return {
             "location": location,
-            "compute_resources": [{
-                "resource_type": "CPU",
-                "ram": ram,
-                "cpu_specs": cpu_info,
-                "storage": storage
-            }]
+            "compute_resources": [resource]
         }
     except Exception as e:
         logger.error(f"Failed to gather system info: {e}")
         return None
+
+# def get_system_info(resource_type="CPU"):
+#     """Gather all system information according to the models."""
+#     try:
+#         location = get_location()
+#         resource_id = str(uuid.uuid4())
+#         ram = get_system_ram_gb()
+#         storage = get_storage_info()
+
+#         # Base resource without cpu_specs or gpu_specs
+#         resource = {
+#             "id": resource_id,
+#             "resource_type": resource_type.upper(),
+#             "location": location,
+#             "hourly_price": 0.0,
+#             "ram": ram,
+#             "storage": storage,
+#             "is_active": True
+#         }
+
+#         # Add the appropriate specs based on resource type
+#         if resource_type.upper() == "CPU":
+#             resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
+#         elif resource_type.upper() == "GPU":
+#             resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
+
+#         return {
+#             "location": location,
+#             "compute_resources": [resource]
+#         }
+#     except Exception as e:
+#         logger.error(f"Failed to gather system info: {e}")
+#         return None
+    
+def has_gpu():
+    """Detect if system has a GPU."""
+    try:
+        if is_windows():
+            ps_cmd = ["powershell", "-Command", """
+                $gpu = Get-CimInstance win32_VideoController | Where-Object { $_.AdapterRAM -ne $null };
+                if ($gpu) { ConvertTo-Json $true } else { ConvertTo-Json $false }
+            """]
+            r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
+            return json.loads(r.stdout)
+        else:
+            # Try nvidia-smi first
+            try:
+                subprocess.run(["nvidia-smi"], capture_output=True, check=True)
+                return True
+            except:
+                # Check for any graphics card using lspci
+                r = subprocess.run(["lspci"], capture_output=True, text=True, check=True)
+                return any("VGA" in line or "3D" in line for line in r.stdout.splitlines())
+    except Exception as e:
+        logger.error(f"Failed to detect GPU: {e}")
+        return False

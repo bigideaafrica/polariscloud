@@ -2,6 +2,7 @@
 import logging
 import platform
 import random
+import socket  # Add this import
 import subprocess
 from pathlib import Path
 
@@ -47,5 +48,17 @@ def run_elevated(cmd):
     else:
         subprocess.run(['sudo', cmd], shell=True, check=True)
 
-def generate_password(length=5):
-    return ''.join(random.choices(config.PASSWORD_CHARS, k=length))
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            # Fallback method
+            hostname = socket.gethostname()
+            return socket.gethostbyname(hostname)
+        except Exception:
+            return '127.0.0.1'
