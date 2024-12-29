@@ -1,0 +1,43 @@
+[
+    {
+        "location": "Kampala, Central Region, UG",
+        "compute_resources": [
+            {
+                "resource_type": "CPU",
+                "ram": "15.68GB",
+                "cpu_specs": {
+                    "op_modes": "32-bit, 64-bit",
+                    "address_sizes": "64 bits",
+                    "byte_order": "Little Endian",
+                    "total_cpus": 12,
+                    "online_cpus": null,
+                    "vendor_id": "GenuineIntel",
+                    "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+                    "cpu_family": 198,
+                    "model": null,
+                    "threads_per_core": 1,
+                    "cores_per_socket": 10,
+                    "sockets": 1,
+                    "stepping": null,
+                    "cpu_max_mhz": 1700.0,
+                    "cpu_min_mhz": 1700.0
+                },
+                "storage": {
+                    "type": "SSD",
+                    "capacity": "419.82GB",
+                    "read_speed": "550MB/s",
+                    "write_speed": "520MB/s"
+                },
+                "network": {
+                    "internal_ip": "192.168.244.33",
+                    "ssh": "ssh HP@0.tcp.in.ngrok.io -p 12917",
+                    "local_ssh": "ssh HP@192.168.244.33",
+                    "password": "banadda",
+                    "open_ports": [
+                        "22"
+                    ]
+                }
+            }
+        ]
+    }
+]
