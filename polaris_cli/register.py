@@ -70,7 +70,7 @@ def get_username():
 def submit_registration(submission):
     try:
         with spinner():
-            api_url = 'http://localhost:8000/api/v1/miners/'
+            api_url = 'https://orchestrator-gekh.onrender.com/api/v1/miners/'
             headers = {'Content-Type': 'application/json'}
             response = requests.post(api_url, json=submission, headers=headers, timeout=10)
             response.raise_for_status()
