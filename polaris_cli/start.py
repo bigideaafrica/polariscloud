@@ -8,6 +8,7 @@ import sys
 import time
 
 import psutil
+from dotenv import load_dotenv  # Ensure you have python-dotenv installed
 from pid import PidFile, PidFileAlreadyRunningError, PidFileError
 from rich.console import Console
 
@@ -21,6 +22,16 @@ def start_polaris():
     """
     Starts the main.py process as a background process.
     """
+    # Load .env file
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+    load_dotenv(dotenv_path=env_path)
+
+    # Retrieve SSH_PASSWORD from environment
+    SSH_PASSWORD = os.getenv('SSH_PASSWORD')
+    if not SSH_PASSWORD:
+        console.print("[red]SSH_PASSWORD not found in .env file.[/red]")
+        sys.exit(1)
+
     try:
         # Attempt to create a PID file; if it exists, the process is already running
         pidfile = PidFile(pidname='polaris-cli-tool', piddir=os.path.dirname(PID_FILE))
@@ -34,11 +45,11 @@ def start_polaris():
     # Determine the operating system
     current_os = platform.system()
     
+    # Prompt for sudo password on Linux
     if current_os != 'Windows':
-        # Prompt for sudo password on Linux
+        console.print("[yellow]Polaris requires elevated privileges to run on Linux.[/yellow]")
+        console.print("[yellow]Please enter your sudo password when prompted.[/yellow]")
         try:
-            console.print("[yellow]Polaris requires elevated privileges to run on Linux.[/yellow]")
-            console.print("[yellow]Please enter your sudo password when prompted.[/yellow]")
             # Execute 'sudo -v' to prompt for password and validate sudo access
             subprocess.run(['sudo', '-v'], check=True)
         except subprocess.CalledProcessError:
@@ -68,13 +79,18 @@ def start_polaris():
         stdout_f = open(stdout_log, 'a')
         stderr_f = open(stderr_log, 'a')
         
+        # Prepare environment variables for the subprocess
+        env = os.environ.copy()
+        env['SSH_PASSWORD'] = SSH_PASSWORD  # Pass SSH_PASSWORD to main.py
+        
         if current_os == 'Windows':
             # Windows-specific process creation
             process = subprocess.Popen(
                 [sys.executable, script_path],
                 stdout=stdout_f,
                 stderr=stderr_f,
-                creationflags=subprocess.CREATE_NEW_CONSOLE  # Open in new console window
+                creationflags=subprocess.CREATE_NEW_CONSOLE,  # Open in new console window
+                env=env
             )
         else:
             # Unix/Linux-specific process creation
@@ -83,7 +99,8 @@ def start_polaris():
                 stdout=stdout_f,               # Redirect stdout to log file
                 stderr=stderr_f,               # Redirect stderr to log file
                 start_new_session=True,        # Detach the process from the parent
-                cwd=os.path.dirname(script_path)  # Set working directory
+                cwd=os.path.dirname(script_path),  # Set working directory
+                env=env
             )
         
         # Write the PID to the PID file
