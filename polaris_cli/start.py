@@ -31,6 +31,20 @@ def start_polaris():
         console.print(f"[red]Failed to create PID file: {e}[/red]")
         sys.exit(1)
     
+    # Determine the operating system
+    current_os = platform.system()
+    
+    if current_os != 'Windows':
+        # Prompt for sudo password on Linux
+        try:
+            console.print("[yellow]Polaris requires elevated privileges to run on Linux.[/yellow]")
+            console.print("[yellow]Please enter your sudo password when prompted.[/yellow]")
+            # Execute 'sudo -v' to prompt for password and validate sudo access
+            subprocess.run(['sudo', '-v'], check=True)
+        except subprocess.CalledProcessError:
+            console.print("[red]Failed to authenticate with sudo. Please try again.[/red]")
+            sys.exit(1)
+    
     # Launch main.py as a separate process
     try:
         script_path = os.path.join(
@@ -43,9 +57,6 @@ def start_polaris():
         if not os.path.exists(script_path):
             console.print(f"[red]main.py not found at {script_path}[/red]")
             sys.exit(1)
-        
-        # Determine the operating system
-        current_os = platform.system()
         
         # Define paths for log files
         log_dir = os.path.join(os.path.dirname(script_path), 'logs')
