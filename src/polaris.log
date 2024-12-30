@@ -3535,3 +3535,20 @@
 2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
 2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
 2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 14:27:41,794 [INFO] Starting ngrok tunnel...
+2024-12-30 14:27:48,970 [INFO] 
+==================================================
+2024-12-30 14:27:48,970 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 14:27:48,970 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 15965
+2024-12-30 14:27:48,970 [INFO] Password: banadda
+2024-12-30 14:27:48,970 [INFO] ==================================================
+
+2024-12-30 14:34:46,488 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:34:46,488 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:34:46,488 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:47:18,033 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:47:18,033 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:47:18,033 [ERROR] Miner's SS58 address not found in the network.
+2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'
+2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'
+2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'

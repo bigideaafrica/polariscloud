@@ -1,3 +1,5 @@
+# register.py
+
 import ast
 import copy
 import json
@@ -9,24 +11,34 @@ import requests
 from click_spinner import spinner
 from rich import box
 from rich.console import Console
+from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from src.pid_manager import PID_FILE
 from src.utils import configure_logging
 
+from .network_handler import NetworkSelectionHandler, NetworkType
+
 logger = configure_logging()
 console = Console()
 
+
 def load_system_info(json_path='system_info.json'):
+    """Load system information from JSON file."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     system_info_full_path = os.path.join(project_root, json_path)
 
     if not os.path.exists(system_info_full_path):
         logger.error("system_info.json not found. Ensure that 'polaris start' is running.")
-        console.print("[red]System information file not found. Ensure that 'polaris start' is running.[/red]")
+        console.print(Panel(
+            "[red]System information file not found.[/red]\n"
+            "Please ensure that 'polaris start' is running.",
+            title="Error",
+            border_style="red"
+        ))
         sys.exit(1)
-    
+
     try:
         with open(system_info_full_path, 'r') as f:
             data = json.load(f)
@@ -34,14 +46,20 @@ def load_system_info(json_path='system_info.json'):
         return data[0]
     except json.JSONDecodeError as e:
         logger.error(f"Error parsing JSON: {e}")
-        console.print("[red]Failed to parse the system information file.[/red]")
+        console.print(Panel(
+            "[red]Failed to parse the system information file.[/red]",
+            title="Error",
+            border_style="red"
+        ))
         sys.exit(1)
 
+
 def display_system_info(system_info):
+    """Display system information in a formatted table."""
     table = Table(title="System Information", box=box.ROUNDED)
     table.add_column("Field", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
-    
+
     def flatten(obj, parent_key=''):
         items = []
         for k, v in obj.items():
@@ -53,21 +71,25 @@ def display_system_info(system_info):
         return items
 
     flattened = flatten(system_info)
-    
+
     for key, value in flattened:
         if isinstance(value, list):
             value = ', '.join(map(str, value))
         table.add_row(key, str(value))
-    
+
     console.print(table)
+
 
 def confirm_registration():
     return Confirm.ask("Do you want to proceed with this registration?", default=True)
 
+
 def get_username():
     return Prompt.ask("Enter your desired username", default="")
 
+
 def submit_registration(submission):
+    """Submit registration to the API."""
     try:
         with spinner():
             api_url = 'https://orchestrator-gekh.onrender.com/api/v1/miners/'
@@ -79,39 +101,61 @@ def submit_registration(submission):
     except requests.HTTPError as http_err:
         try:
             error_details = response.json()
-            console.print(f"[red]Registration failed: {error_details}[/red]")
+            console.print(Panel(
+                f"[red]Registration failed: {error_details}[/red]",
+                title="Error",
+                border_style="red"
+            ))
             logger.error(f"Registration failed: {json.dumps(error_details, indent=2)}")
         except json.JSONDecodeError:
-            console.print(f"[red]Registration failed: {http_err}[/red]")
+            console.print(Panel(
+                f"[red]Registration failed: {http_err}[/red]",
+                title="Error",
+                border_style="red"
+            ))
             logger.error(f"Registration failed: {http_err}")
         sys.exit(1)
     except requests.Timeout:
-        console.print("[red]Request timed out while submitting registration.[/red]")
+        console.print(Panel(
+            "[red]Request timed out while submitting registration.[/red]",
+            title="Timeout Error",
+            border_style="red"
+        ))
         logger.error("Request timed out while submitting registration.")
         sys.exit(1)
     except Exception as err:
-        console.print(f"[red]An error occurred during registration: {err}[/red]")
+        console.print(Panel(
+            f"[red]An error occurred during registration: {err}[/red]",
+            title="Error",
+            border_style="red"
+        ))
         logger.error(f"An error occurred during registration: {err}")
         sys.exit(1)
 
+
 def display_registration_status(result):
+    """Display registration status in a formatted table."""
     miner_id = result.get('miner_id', 'N/A')
     message = result.get('message', 'No message provided.')
     added_resources = result.get('added_resources', [])
-    
+
     table = Table(title="Registration Status", box=box.ROUNDED)
     table.add_column("Field", style="cyan", no_wrap=True)
     table.add_column("Details", style="magenta")
-    
+
     table.add_row("Message", message)
     table.add_row("Miner ID", miner_id)
     table.add_row("Added Resources", "\n".join(added_resources) if added_resources else "N/A")
-    
+
     console.print(table)
-    console.print("\n[bold yellow]🔑 Important: Save your Miner ID[/bold yellow]")
-    console.print(f"Your Miner ID is: [bold cyan]{miner_id}[/bold cyan]")
-    console.print("You will need this ID to manage your compute resources.")
-    
+    console.print(Panel(
+        f"Your Miner ID is: [bold cyan]{miner_id}[/bold cyan]\n"
+        "You will need this ID to manage your compute resources.",
+        title="🔑 Important: Save your Miner ID",
+        border_style="yellow"
+    ))
+
+    # Clean up system_info.json after successful registration
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     system_info_path = os.path.join(project_root, 'system_info.json')
     if os.path.exists(system_info_path):
@@ -120,6 +164,7 @@ def display_registration_status(result):
             logger.info(f"Removed {system_info_path} after registration.")
         except Exception as e:
             logger.warning(f"Failed to remove system_info.json: {e}")
+
 
 def reformat_ssh(ssh_str):
     ssh_str = ssh_str.strip()
@@ -136,36 +181,82 @@ def reformat_ssh(ssh_str):
         else:
             raise ValueError(f"SSH string '{ssh_str}' is not in the expected format.")
 
+
+def check_fields(data, fields):
+    missing = []
+    for field in fields:
+        keys = field.split('.')
+        value = data
+        for key in keys:
+            value = value.get(key)
+            if value is None:
+                missing.append(field)
+                break
+    return missing
+
+
 def register_miner():
+    """Main registration function with network selection."""
+    # Handle network selection
+    network_handler = NetworkSelectionHandler()
+    network_type = network_handler.select_network()
+
+    if network_type == NetworkType.BITTENSOR:
+        network_handler.handle_bittensor_registration()
+        return
+
+    # Get wallet info for Commune network
+    wallet_name = None
+    commune_uid = None
+    if network_type == NetworkType.COMMUNE:
+        result = network_handler.handle_commune_registration()
+        if not result:
+            console.print(Panel(
+                "[red]Commune registration failed.[/red]",
+                title="Error",
+                border_style="red"
+            ))
+            sys.exit(1)
+        wallet_name, commune_uid = result
+
+    # Continue with normal registration process
     system_info = load_system_info()
     display_system_info(system_info)
-    
+
     if not confirm_registration():
         console.print("[yellow]Registration cancelled.[/yellow]")
         sys.exit(0)
-    
+
     username = get_username()
-    
+
     if not username:
-        console.print("[red]Username is required for registration.[/red]")
+        console.print(Panel(
+            "[red]Username is required for registration.[/red]",
+            title="Error",
+            border_style="red"
+        ))
         sys.exit(1)
-    
+
     submission = {
         "name": username,
         "location": system_info.get("location", "N/A"),
         "description": "Registered via Polaris CLI tool",
         "compute_resources": []
     }
-    
+
     compute_resources = system_info.get("compute_resources", [])
-    
+
     if isinstance(compute_resources, dict):
         compute_resources = [compute_resources]
     elif not isinstance(compute_resources, list):
-        console.print("[red]'compute_resources' must be a list or a dictionary in system_info.json.[/red]")
+        console.print(Panel(
+            "[red]'compute_resources' must be a list or a dictionary in system_info.json.[/red]",
+            title="Error",
+            border_style="red"
+        ))
         logger.error("'compute_resources' must be a list or a dictionary in system_info.json.")
         sys.exit(1)
-    
+
     for resource in compute_resources:
         resource_submission = {
             "id": resource.get("id"),
@@ -204,21 +295,23 @@ def register_miner():
                 "open_ports": resource.get("network", {}).get("open_ports")
             }
         }
-        
+
         resource_submission.pop("is_active", None)
-        
+
         try:
+            # Validate and process 'stepping'
             stepping = resource_submission["cpu_specs"]["stepping"]
             if stepping is None:
                 stepping = 1
                 resource_submission["cpu_specs"]["stepping"] = stepping
                 logger.info(f"'stepping' was None for resource {resource_submission['id']}. Set to 1.")
-            
+
             if not isinstance(stepping, int):
                 console.print(f"[red]Invalid 'stepping' value for resource {resource_submission['id']}. It must be an integer.[/red]")
                 logger.error(f"Invalid 'stepping' value for resource {resource_submission['id']}. It must be an integer.")
                 sys.exit(1)
-            
+
+            # Validate 'ram'
             ram = resource_submission["ram"]
             if isinstance(ram, str) and ram.endswith("GB"):
                 try:
@@ -231,9 +324,10 @@ def register_miner():
                 console.print(f"[red]Invalid RAM format for resource {resource_submission['id']}. Expected a string ending with 'GB'.[/red]")
                 logger.error(f"Invalid RAM format for resource {resource_submission['id']}. Expected a string ending with 'GB'.")
                 sys.exit(1)
-            
+
+            # Process 'online_cpus'
             online_cpus = resource_submission["cpu_specs"]["online_cpus"]
-            
+
             if isinstance(online_cpus, list):
                 if all(isinstance(cpu, int) for cpu in online_cpus):
                     if online_cpus:
@@ -258,7 +352,7 @@ def register_miner():
                     console.print(f"[red]{ve}[/red]")
                     logger.error(str(ve))
                     sys.exit(1)
-                
+
                 if online_cpus.startswith('[') and online_cpus.endswith(']'):
                     try:
                         online_cpus_list = ast.literal_eval(online_cpus)
@@ -305,7 +399,8 @@ def register_miner():
                 console.print(f"[red]Invalid 'online_cpus' format for resource {resource_submission['id']}. Expected format like '0-15' or a list string.[/red]")
                 logger.error(f"Invalid 'online_cpus' format for resource {resource_submission['id']}. Expected format like '0-15' or a list string.")
                 sys.exit(1)
-            
+
+            # Validate 'open_ports'
             open_ports = resource_submission["network"]["open_ports"]
             if isinstance(open_ports, list):
                 if all(isinstance(port, str) for port in open_ports):
@@ -323,7 +418,8 @@ def register_miner():
                 console.print(f"[red]'open_ports' must be a list for resource {resource_submission['id']}.[/red]")
                 logger.error(f"'open_ports' must be a list for resource {resource_submission['id']}.")
                 sys.exit(1)
-            
+
+            # Validate 'password' and 'username' in network
             password = resource_submission["network"]["password"]
             username_net = resource_submission["network"]["username"]
             if not isinstance(password, str) or not password.strip():
@@ -338,7 +434,8 @@ def register_miner():
             console.print(f"[red]Error processing compute resource data: {e}[/red]")
             logger.error(f"Error processing compute resource data: {e}")
             sys.exit(1)
-        
+
+        # Check for missing required fields
         required_fields = [
             "id", "resource_type", "location", "hourly_price",
             "ram", "storage.type", "storage.capacity",
@@ -354,43 +451,57 @@ def register_miner():
             "network.ssh", "network.password",
             "network.username", "network.open_ports"
         ]
-        
-        def check_fields(data, fields):
-            missing = []
-            for field in fields:
-                keys = field.split('.')
-                value = data
-                for key in keys:
-                    value = value.get(key)
-                    if value is None:
-                        missing.append(field)
-                        break
-            return missing
-        
+
         missing_fields = check_fields(resource_submission, required_fields)
         if missing_fields:
             console.print(f"[red]Compute resource missing fields: {', '.join(missing_fields)}[/red]")
             logger.error(f"Compute resource missing fields: {', '.join(missing_fields)}")
             sys.exit(1)
-        
+
         submission["compute_resources"].append(resource_submission)
-    
+
+    # Prepare safe submission for logging and display
     safe_submission = copy.deepcopy(submission)
     for resource in safe_submission.get("compute_resources", []):
         if "network" in resource:
             resource["network"]["password"] = "*****"
     logger.info(f"Submitting registration with data: {json.dumps(safe_submission, indent=2)}")
-    
+
     console.print("[bold green]Final Submission Payload:[/bold green]")
     safe_console_submission = copy.deepcopy(submission)
     for resource in safe_console_submission.get("compute_resources", []):
         if "network" in resource:
             resource["network"]["password"] = "*****"
     console.print(json.dumps(safe_console_submission, indent=2))
-    
+
+    # Submit registration
     result = submit_registration(submission)
-    
+
+    # Display registration status
     display_registration_status(result)
+
+    # Handle Commune network post-registration
+    if network_type == NetworkType.COMMUNE and result.get('miner_id'):
+        commune_result = network_handler.register_commune_miner(
+            result['miner_id'],
+            commune_uid
+        )
+        if commune_result:
+            console.print(Panel(
+                "[green]Successfully registered with Commune network![/green]\n"
+                f"Wallet Name: {wallet_name}\n"
+                f"Commune UID: {commune_uid}",
+                title="🌐 Commune Registration Status",
+                border_style="green"
+            ))
+        else:
+            console.print(Panel(
+                "[yellow]Registration with compute network was successful, but Commune network registration failed.[/yellow]\n"
+                "You can try registering with Commune network later using your miner ID.",
+                title="⚠️ Partial Registration",
+                border_style="yellow"
+            ))
+
 
 if __name__ == "__main__":
     register_miner()
