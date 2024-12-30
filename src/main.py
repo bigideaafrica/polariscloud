@@ -17,11 +17,15 @@ from src.system_info import get_system_info
 
 logger = utils.configure_logging()
 
+def get_project_root():
+    """Get the project root directory regardless of OS"""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def save_system_info(data, filename='system_info.json'):
     try:
-        # Save the JSON file in the same directory as main.py
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        abs_path = os.path.join(script_dir, filename)
+        # Always save in project root directory
+        root_dir = get_project_root()
+        abs_path = os.path.join(root_dir, filename)
         with open(abs_path, 'w') as f:
             json.dump(data, f, indent=4)
         return abs_path

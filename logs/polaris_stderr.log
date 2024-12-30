@@ -1,0 +1,3 @@
+2024-12-30 18:27:39,974 [ERROR] Failed to run command mkdir -p /etc/ssh: [WinError 2] The system cannot find the file specified
+2024-12-30 18:27:39,974 [INFO] Stopping ngrok tunnel...
+2024-12-30 18:27:42,142 [INFO] Shutdown complete.

@@ -11,6 +11,7 @@ from dotenv import load_dotenv  # Ensure you have python-dotenv installed
 from pid import PidFile, PidFileAlreadyRunningError, PidFileError
 from rich.console import Console
 
+from src.main import get_project_root
 from src.pid_manager import PID_FILE
 from src.utils import configure_logging
 
@@ -69,7 +70,8 @@ def start_polaris():
             sys.exit(1)
         
         # Define paths for log files
-        log_dir = os.path.join(os.path.dirname(script_path), 'logs')
+        # Update log file paths in start.py
+        log_dir = os.path.join(get_project_root(), 'logs')
         os.makedirs(log_dir, exist_ok=True)
         stdout_log = os.path.join(log_dir, 'polaris_stdout.log')
         stderr_log = os.path.join(log_dir, 'polaris_stderr.log')
