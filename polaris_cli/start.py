@@ -5,7 +5,6 @@ import platform  # Import platform module for OS detection
 import signal
 import subprocess
 import sys
-import time
 
 import psutil
 from dotenv import load_dotenv  # Ensure you have python-dotenv installed
@@ -45,8 +44,8 @@ def start_polaris():
     # Determine the operating system
     current_os = platform.system()
     
-    # Prompt for sudo password on Linux
     if current_os != 'Windows':
+        # Prompt for sudo password on Linux
         console.print("[yellow]Polaris requires elevated privileges to run on Linux.[/yellow]")
         console.print("[yellow]Please enter your sudo password when prompted.[/yellow]")
         try:

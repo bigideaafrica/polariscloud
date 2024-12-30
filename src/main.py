@@ -1,7 +1,9 @@
 # src/main.py
 
 import json
+import logging
 import os
+import subprocess
 import sys
 import time
 
@@ -27,6 +29,42 @@ def save_system_info(data, filename='system_info.json'):
         logger.error(f"Failed to save system info: {e}")
         return None
 
+def run_sudo_command(command, password):
+    """
+    Executes a sudo command by providing the password via stdin.
+    """
+    try:
+        proc = subprocess.Popen(
+            ['sudo', '-S'] + command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = proc.communicate(password + '\n')
+        if proc.returncode != 0:
+            logger.error(f"Command {' '.join(command)} failed: {stderr}")
+            sys.exit(1)
+        return stdout
+    except Exception as e:
+        logger.error(f"Failed to run command {' '.join(command)}: {e}")
+        sys.exit(1)
+
+def setup_ssh_server():
+    """
+    Sets up the SSH server by creating necessary directories and restarting the SSH service.
+    """
+    SSH_PASSWORD = os.getenv('SSH_PASSWORD')
+    if not SSH_PASSWORD:
+        logger.error("SSH_PASSWORD not found in environment variables.")
+        sys.exit(1)
+    
+    # Example: Create /etc/ssh directory if it doesn't exist
+    run_sudo_command(['mkdir', '-p', '/etc/ssh'], SSH_PASSWORD)
+    
+    # Example: Restart SSH service
+    run_sudo_command(['systemctl', 'restart', 'ssh'], SSH_PASSWORD)
+
 def main():
     # Create PID file to ensure only one instance runs
     pidfile = create_pid_file()
@@ -42,7 +80,7 @@ def main():
             ssh = SSHManager()
             
             # Setup SSH server
-            ssh.setup_server(22)
+            setup_ssh_server()
             
             # Get SSH credentials
             username, password = ssh.setup_user()
@@ -97,7 +135,7 @@ def main():
                     except Exception as restart_error:
                         logger.error(f"Failed to restart tunnel: {restart_error}")
                     time.sleep(15)  # Wait before retrying
-                        
+                
     except KeyboardInterrupt:
         logger.info("\nShutdown requested. Cleaning up...")
     except Exception as e:
