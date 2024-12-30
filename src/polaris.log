@@ -3205,3 +3205,333 @@
 2024-12-29 16:06:40,660 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
 2024-12-29 16:06:40,660 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
 2024-12-29 16:06:40,660 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-29 20:10:00,306 [INFO] Starting ngrok tunnel...
+2024-12-29 20:10:09,536 [INFO] 
+==================================================
+2024-12-29 20:10:09,536 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-29 20:10:09,536 [INFO] SSH Command: ssh HP@0.tcp.eu.ngrok.io -p 11143
+2024-12-29 20:10:09,536 [INFO] Password: banadda
+2024-12-29 20:10:09,536 [INFO] ==================================================
+
+2024-12-30 06:37:49,749 [INFO] Starting ngrok tunnel...
+2024-12-30 06:37:57,064 [INFO] 
+==================================================
+2024-12-30 06:37:57,064 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 06:37:57,064 [INFO] SSH Command: ssh HP@5.tcp.eu.ngrok.io -p 11264
+2024-12-30 06:37:57,064 [INFO] Password: banadda
+2024-12-30 06:37:57,064 [INFO] ==================================================
+
+2024-12-30 06:38:08,734 [INFO] System information loaded successfully.
+2024-12-30 06:38:08,734 [INFO] System information loaded successfully.
+2024-12-30 06:38:08,734 [INFO] System information loaded successfully.
+2024-12-30 06:38:15,127 [INFO] 'stepping' was None for resource d6773e3c-a157-4d1d-92e9-4e58a300621e. Set to 1.
+2024-12-30 06:38:15,127 [INFO] 'stepping' was None for resource d6773e3c-a157-4d1d-92e9-4e58a300621e. Set to 1.
+2024-12-30 06:38:15,127 [INFO] 'stepping' was None for resource d6773e3c-a157-4d1d-92e9-4e58a300621e. Set to 1.
+2024-12-30 06:38:15,129 [INFO] Reformatted 'ssh' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e: ssh://HP@5.tcp.eu.ngrok.io:11264
+2024-12-30 06:38:15,129 [INFO] Reformatted 'ssh' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e: ssh://HP@5.tcp.eu.ngrok.io:11264
+2024-12-30 06:38:15,129 [INFO] Reformatted 'ssh' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e: ssh://HP@5.tcp.eu.ngrok.io:11264
+2024-12-30 06:38:15,129 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e.
+2024-12-30 06:38:15,129 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e.
+2024-12-30 06:38:15,129 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource d6773e3c-a157-4d1d-92e9-4e58a300621e.
+2024-12-30 06:38:15,130 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "d6773e3c-a157-4d1d-92e9-4e58a300621e",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "192.168.244.33",
+        "ssh": "ssh://HP@5.tcp.eu.ngrok.io:11264",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 06:38:15,130 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "d6773e3c-a157-4d1d-92e9-4e58a300621e",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "192.168.244.33",
+        "ssh": "ssh://HP@5.tcp.eu.ngrok.io:11264",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 06:38:15,130 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "d6773e3c-a157-4d1d-92e9-4e58a300621e",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "192.168.244.33",
+        "ssh": "ssh://HP@5.tcp.eu.ngrok.io:11264",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 06:38:17,190 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 06:38:17,190 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 06:38:17,190 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 13:34:55,471 [INFO] Starting ngrok tunnel...
+2024-12-30 13:35:04,332 [INFO] 
+==================================================
+2024-12-30 13:35:04,332 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 13:35:04,332 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 17522
+2024-12-30 13:35:04,332 [INFO] Password: banadda
+2024-12-30 13:35:04,332 [INFO] ==================================================
+
+2024-12-30 13:35:38,059 [INFO] System information loaded successfully.
+2024-12-30 13:35:38,059 [INFO] System information loaded successfully.
+2024-12-30 13:35:38,059 [INFO] System information loaded successfully.
+2024-12-30 13:36:05,063 [INFO] 'stepping' was None for resource 0d85560b-8e0f-4327-83e9-fceac8808365. Set to 1.
+2024-12-30 13:36:05,063 [INFO] 'stepping' was None for resource 0d85560b-8e0f-4327-83e9-fceac8808365. Set to 1.
+2024-12-30 13:36:05,063 [INFO] 'stepping' was None for resource 0d85560b-8e0f-4327-83e9-fceac8808365. Set to 1.
+2024-12-30 13:36:05,063 [INFO] Reformatted 'ssh' for resource 0d85560b-8e0f-4327-83e9-fceac8808365: ssh://HP@0.tcp.in.ngrok.io:17522
+2024-12-30 13:36:05,063 [INFO] Reformatted 'ssh' for resource 0d85560b-8e0f-4327-83e9-fceac8808365: ssh://HP@0.tcp.in.ngrok.io:17522
+2024-12-30 13:36:05,063 [INFO] Reformatted 'ssh' for resource 0d85560b-8e0f-4327-83e9-fceac8808365: ssh://HP@0.tcp.in.ngrok.io:17522
+2024-12-30 13:36:05,063 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 0d85560b-8e0f-4327-83e9-fceac8808365.
+2024-12-30 13:36:05,063 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 0d85560b-8e0f-4327-83e9-fceac8808365.
+2024-12-30 13:36:05,063 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 0d85560b-8e0f-4327-83e9-fceac8808365.
+2024-12-30 13:36:05,063 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "0d85560b-8e0f-4327-83e9-fceac8808365",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:17522",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 13:36:05,063 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "0d85560b-8e0f-4327-83e9-fceac8808365",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:17522",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 13:36:05,063 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "0d85560b-8e0f-4327-83e9-fceac8808365",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:17522",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 13:36:07,618 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
