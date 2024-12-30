@@ -1,6 +1,7 @@
 # polaris_cli/start.py
 
 import os
+import platform  # Import platform module for OS detection
 import signal
 import subprocess
 import sys
@@ -8,10 +9,7 @@ import time
 
 import psutil
 from pid import PidFile, PidFileAlreadyRunningError, PidFileError
-from rich import box
-from rich.align import Align
 from rich.console import Console
-from rich.panel import Panel
 
 from src.pid_manager import PID_FILE
 from src.utils import configure_logging
@@ -35,17 +33,55 @@ def start_polaris():
     
     # Launch main.py as a separate process
     try:
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'main.py')
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            creationflags=subprocess.CREATE_NEW_CONSOLE  # For Windows to open in new console
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'src',
+            'main.py'
         )
+        
+        # Ensure the script path exists
+        if not os.path.exists(script_path):
+            console.print(f"[red]main.py not found at {script_path}[/red]")
+            sys.exit(1)
+        
+        # Determine the operating system
+        current_os = platform.system()
+        
+        # Define paths for log files
+        log_dir = os.path.join(os.path.dirname(script_path), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        stdout_log = os.path.join(log_dir, 'polaris_stdout.log')
+        stderr_log = os.path.join(log_dir, 'polaris_stderr.log')
+        
+        # Open log files
+        stdout_f = open(stdout_log, 'a')
+        stderr_f = open(stderr_log, 'a')
+        
+        if current_os == 'Windows':
+            # Windows-specific process creation
+            process = subprocess.Popen(
+                [sys.executable, script_path],
+                stdout=stdout_f,
+                stderr=stderr_f,
+                creationflags=subprocess.CREATE_NEW_CONSOLE  # Open in new console window
+            )
+        else:
+            # Unix/Linux-specific process creation
+            process = subprocess.Popen(
+                [sys.executable, script_path],
+                stdout=stdout_f,               # Redirect stdout to log file
+                stderr=stderr_f,               # Redirect stderr to log file
+                start_new_session=True,        # Detach the process from the parent
+                cwd=os.path.dirname(script_path)  # Set working directory
+            )
+        
         # Write the PID to the PID file
         with open(PID_FILE, 'w') as f:
             f.write(str(process.pid))
+        
         console.print("[green]Polaris started successfully.[/green]")
+        console.print(f"[blue]PID: {process.pid}[/blue]")
+        console.print(f"[blue]Logs: stdout -> {stdout_log}, stderr -> {stderr_log}[/blue]")
     except Exception as e:
         console.print(f"[red]Failed to start Polaris: {e}[/red]")
         sys.exit(1)
@@ -66,12 +102,21 @@ def stop_polaris():
         sys.exit(1)
     
     try:
-        # Terminate the process
+        # Terminate the process gracefully
         os.kill(pid, signal.SIGTERM)
         # Optionally, wait for the process to terminate
         time.sleep(2)
+        
+        # Check if the process has terminated
+        if psutil.pid_exists(pid):
+            console.print("[yellow]Polaris did not terminate gracefully. Forcing termination.[/yellow]")
+            os.kill(pid, signal.SIGKILL)
+            time.sleep(1)
+        
+        # Remove the PID file
         if os.path.exists(PID_FILE):
             os.remove(PID_FILE)
+        
         console.print("[green]Polaris stopped successfully.[/green]")
     except ProcessLookupError:
         console.print("[yellow]Polaris process not found. Removing stale PID file.[/yellow]")
@@ -110,3 +155,27 @@ def check_status():
     except Exception as e:
         console.print(f"[red]Error checking Polaris status: {e}[/red]")
         sys.exit(1)
+
+def main():
+    """
+    Entry point for the CLI tool.
+    """
+    if len(sys.argv) != 2:
+        console.print("[red]Usage: polaris [start|stop|status|register|view-pod][/red]")
+        sys.exit(1)
+    
+    command = sys.argv[1].lower()
+    
+    if command == 'start':
+        start_polaris()
+    elif command == 'stop':
+        stop_polaris()
+    elif command == 'status':
+        check_status()
+    else:
+        console.print(f"[red]Unknown command: {command}[/red]")
+        console.print("[red]Usage: polaris [start|stop|status|register|view-pod][/red]")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

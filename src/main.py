@@ -17,7 +17,9 @@ logger = utils.configure_logging()
 
 def save_system_info(data, filename='system_info.json'):
     try:
-        abs_path = os.path.abspath(filename)
+        # Save the JSON file in the same directory as main.py
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_path = os.path.join(script_dir, filename)
         with open(abs_path, 'w') as f:
             json.dump(data, f, indent=4)
         return abs_path
@@ -64,11 +66,14 @@ def main():
             # Save system information
             file_path = save_system_info([system_info])
             
-            logger.info("\n" + "="*50)
-            logger.info(f"System information saved to: {file_path}")
-            logger.info(f"SSH Command: ssh {username}@{host} -p {port}")
-            logger.info(f"Password: {password}")
-            logger.info("="*50 + "\n")
+            if file_path:
+                logger.info("\n" + "="*50)
+                logger.info(f"System information saved to: {file_path}")
+                logger.info(f"SSH Command: ssh {username}@{host} -p {port}")
+                logger.info(f"Password: {password}")
+                logger.info("="*50 + "\n")
+            else:
+                logger.error("Failed to save system information.")
             
             # Monitor ngrok tunnel status
             while True:

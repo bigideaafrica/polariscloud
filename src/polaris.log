@@ -3552,3 +3552,157 @@
 2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'
 2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'
 2024-12-30 14:47:56,883 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\yominer.json'
+2024-12-30 15:31:27,881 [INFO] Starting ngrok tunnel...
+2024-12-30 15:31:35,118 [INFO] 
+==================================================
+2024-12-30 15:31:35,119 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 15:31:35,119 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 13420
+2024-12-30 15:31:35,119 [INFO] Password: banadda
+2024-12-30 15:31:35,119 [INFO] ==================================================
+
+2024-12-30 16:17:42,034 [INFO] Starting ngrok tunnel...
+2024-12-30 16:17:49,310 [INFO] 
+==================================================
+2024-12-30 16:17:49,311 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 16:17:49,311 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 14289
+2024-12-30 16:17:49,311 [INFO] Password: banadda
+2024-12-30 16:17:49,312 [INFO] ==================================================
+
+2024-12-30 16:18:08,811 [INFO] 
+Shutdown requested. Cleaning up...
+2024-12-30 16:18:08,811 [INFO] Stopping ngrok tunnel...
+2024-12-30 16:18:15,412 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000025F94414190>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 16:29:26,505 [INFO] Starting ngrok tunnel...
+2024-12-30 16:29:33,719 [INFO] 
+==================================================
+2024-12-30 16:29:33,720 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 16:29:33,721 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 10700
+2024-12-30 16:29:33,721 [INFO] Password: banadda
+2024-12-30 16:29:33,721 [INFO] ==================================================
+
+2024-12-30 16:29:43,084 [INFO] 
+Shutdown requested. Cleaning up...
+2024-12-30 16:29:43,084 [INFO] Stopping ngrok tunnel...
+2024-12-30 16:29:45,245 [INFO] Shutdown complete.
+2024-12-30 16:29:56,279 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000025F94416250>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 16:46:13,494 [INFO] Starting ngrok tunnel...
+2024-12-30 16:46:20,784 [INFO] 
+==================================================
+2024-12-30 16:46:20,784 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 16:46:20,784 [INFO] SSH Command: ssh HP@2.tcp.eu.ngrok.io -p 18832
+2024-12-30 16:46:20,784 [INFO] Password: banadda
+2024-12-30 16:46:20,784 [INFO] ==================================================
+
+2024-12-30 17:03:00,794 [ERROR] Stop error: process no longer exists (pid=21628)
+Traceback (most recent call last):
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 726, in wrapper
+    return fun(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 914, in kill
+    return cext.proc_kill(self.pid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+ProcessLookupError: [Errno 3] assume no such process (originated from OpenProcess -> ERROR_INVALID_PARAMETER)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\users\hp\documents\remote_access_tool\polaris_cli\start.py", line 140, in stop_polaris
+    parent.terminate()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\__init__.py", line 1324, in terminate
+    self._proc.kill()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 728, in wrapper
+    raise convert_oserror(err, pid=self.pid, name=self._name)
+psutil.NoSuchProcess: process no longer exists (pid=21628)
+2024-12-30 17:03:00,794 [ERROR] Stop error: process no longer exists (pid=21628)
+Traceback (most recent call last):
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 726, in wrapper
+    return fun(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 914, in kill
+    return cext.proc_kill(self.pid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+ProcessLookupError: [Errno 3] assume no such process (originated from OpenProcess -> ERROR_INVALID_PARAMETER)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\users\hp\documents\remote_access_tool\polaris_cli\start.py", line 140, in stop_polaris
+    parent.terminate()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\__init__.py", line 1324, in terminate
+    self._proc.kill()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 728, in wrapper
+    raise convert_oserror(err, pid=self.pid, name=self._name)
+psutil.NoSuchProcess: process no longer exists (pid=21628)
+2024-12-30 17:03:00,794 [ERROR] Stop error: process no longer exists (pid=21628)
+Traceback (most recent call last):
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 726, in wrapper
+    return fun(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 914, in kill
+    return cext.proc_kill(self.pid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+ProcessLookupError: [Errno 3] assume no such process (originated from OpenProcess -> ERROR_INVALID_PARAMETER)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\users\hp\documents\remote_access_tool\polaris_cli\start.py", line 140, in stop_polaris
+    parent.terminate()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\__init__.py", line 1324, in terminate
+    self._proc.kill()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 728, in wrapper
+    raise convert_oserror(err, pid=self.pid, name=self._name)
+psutil.NoSuchProcess: process no longer exists (pid=21628)
+2024-12-30 17:03:06,761 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000025F94405310>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 17:03:45,544 [INFO] Starting ngrok tunnel...
+2024-12-30 17:03:52,775 [INFO] 
+==================================================
+2024-12-30 17:03:52,775 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 17:03:52,775 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 11097
+2024-12-30 17:03:52,775 [INFO] Password: banadda
+2024-12-30 17:03:52,775 [INFO] ==================================================
+
+2024-12-30 17:05:03,742 [INFO] Starting ngrok tunnel...
+2024-12-30 17:05:11,005 [INFO] 
+==================================================
+2024-12-30 17:05:11,005 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\src\system_info.json
+2024-12-30 17:05:11,005 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 19041
+2024-12-30 17:05:11,005 [INFO] Password: banadda
+2024-12-30 17:05:11,006 [INFO] ==================================================
+
+2024-12-30 17:05:19,369 [ERROR] Stop error: process no longer exists (pid=12448)
+Traceback (most recent call last):
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 726, in wrapper
+    return fun(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 914, in kill
+    return cext.proc_kill(self.pid)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+ProcessLookupError: [Errno 3] assume no such process (originated from OpenProcess -> ERROR_INVALID_PARAMETER)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\HP\Documents\remote_access_tool\polaris_cli\start.py", line 140, in stop_polaris
+    parent.terminate()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\__init__.py", line 1324, in terminate
+    self._proc.kill()
+  File "C:\Users\HP\.virtualenvs\flower-federated-CFzKsM-I\Lib\site-packages\psutil\_pswindows.py", line 728, in wrapper
+    raise convert_oserror(err, pid=self.pid, name=self._name)
+psutil.NoSuchProcess: process no longer exists (pid=12448)
+2024-12-30 17:26:35,041 [INFO] Starting ngrok tunnel...
+2024-12-30 17:26:42,313 [INFO] 
+==================================================
+2024-12-30 17:26:42,314 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 17:26:42,314 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 18802
+2024-12-30 17:26:42,314 [INFO] Password: banadda
+2024-12-30 17:26:42,314 [INFO] ==================================================
+
+2024-12-30 17:27:04,158 [INFO] Starting ngrok tunnel...
+2024-12-30 17:27:11,427 [INFO] 
+==================================================
+2024-12-30 17:27:11,427 [INFO] System information saved to: C:\Users\HP\Documents\remote_access_tool\system_info.json
+2024-12-30 17:27:11,427 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 12899
+2024-12-30 17:27:11,427 [INFO] Password: banadda
+2024-12-30 17:27:11,427 [INFO] ==================================================
+
