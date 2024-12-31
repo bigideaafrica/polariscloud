@@ -1,34 +1,43 @@
-# utils.py
+# src/utils.py
+
 import logging
+import os
 import platform
 import random
+import socket  # Add this import
 import subprocess
 from pathlib import Path
 
-from . import config
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from . import config  # Ensure config.py exists in the src/ directory
 
 
 def configure_logging():
-    logger = logging.getLogger('remote_access')
-    logger.setLevel(logging.DEBUG)
+    """
+    Configures the logging settings.
+    """
+    logger = logging.getLogger('polaris_cli')
+    logger.setLevel(logging.INFO)
     
-    config.LOG_DIR.mkdir(exist_ok=True)
-    file_handler = logging.FileHandler(config.LOG_DIR / 'remote-access.log')
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s]: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    ))
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(
-        "%(message)s"
-    ))
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
     
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
+    # File handler
+    log_file = os.path.join(get_project_root(), 'logs', 'polaris.log')  # Corrected path
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)  # Ensure log directory exists
+    fh = logging.FileHandler(log_file)
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    
     return logger
+
 
 def run_elevated(cmd):
     if platform.system().lower() == "windows":
@@ -47,5 +56,28 @@ def run_elevated(cmd):
     else:
         subprocess.run(['sudo', cmd], shell=True, check=True)
 
-def generate_password(length=5):
-    return ''.join(random.choices(config.PASSWORD_CHARS, k=length))
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            # Fallback method
+            hostname = socket.gethostname()
+            return socket.gethostbyname(hostname)
+        except Exception:
+            return '127.0.0.1'
+
+
+def get_project_root():
+    """
+    Determines the root directory of the project.
+    
+    Returns:
+        str: Absolute path to the project root.
+    """
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

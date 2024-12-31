@@ -1,0 +1,11 @@
+click
+tabulate
+click-spinner
+rich
+inquirer
+requests
+xlsxwriter
+pyyaml
+psutil
+python-dotenv
+pid
