@@ -1,0 +1,37 @@
+2024-12-31 10:20:15,588 [WARNING] Restarting script with administrative privileges...
+2024-12-31 10:20:16,702 [ERROR] Command failed: A subdirectory or file C:\ProgramData\ssh already exists.
+
+2024-12-31 10:20:16,955 [INFO] Command output: Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+
+2024-12-31 10:20:17,146 [INFO] Command output: Start-Service sshd
+
+2024-12-31 10:20:17,361 [INFO] Command output: Set-Service -Name sshd -StartupType Automatic
+
+2024-12-31 10:20:17,490 [INFO] Command output: Ok.
+
+
+2024-12-31 10:20:28,235 [INFO] Starting ngrok tunnel...
+2024-12-31 10:20:37,563 [INFO] 
+==================================================
+2024-12-31 10:20:37,563 [INFO] System information saved to: c:\users\hp\documents\remote_access_tool\system_info.json
+2024-12-31 10:20:37,565 [INFO] SSH Command: ssh HP@5.tcp.eu.ngrok.io -p 17615
+2024-12-31 10:20:37,565 [INFO] Password: banadda
+2024-12-31 10:20:37,565 [INFO] ==================================================
+
+2024-12-31 10:26:06,048 [WARNING] Restarting script with administrative privileges...
+2024-12-31 10:26:06,183 [INFO] Script relaunched with administrative privileges.
+2024-12-31 10:26:06,183 [INFO] Relaunching Polaris with administrative privileges.
+2024-12-31 10:26:06,768 [INFO] PID file created with PID: 24012
+2024-12-31 10:26:06,785 [ERROR] Command 'mkdir C:\ProgramData\ssh' failed with error: A subdirectory or file C:\ProgramData\ssh already exists.
+2024-12-31 10:26:06,785 [INFO] SSH directory created at C:\ProgramData\ssh using os.makedirs.
+2024-12-31 10:26:07,401 [INFO] SSH server configured successfully.
+2024-12-31 10:26:07,492 [INFO] Windows Firewall configured to allow SSH connections on port 22.
+2024-12-31 10:26:17,661 [INFO] Starting ngrok tunnel...
+2024-12-31 10:26:30,865 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002597C255250>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-31 10:26:34,119 [INFO] 
+==================================================
+2024-12-31 10:26:34,119 [INFO] System information saved to: c:\users\hp\documents\remote_access_tool\system_info.json
+2024-12-31 10:26:34,119 [INFO] SSH Command: ssh HP@0.tcp.in.ngrok.io -p 17817
+2024-12-31 10:26:34,119 [INFO] Password: banadda
+2024-12-31 10:26:34,119 [INFO] ==================================================
+

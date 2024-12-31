@@ -3,7 +3,7 @@
         "location": "Kampala, Central Region, UG",
         "compute_resources": [
             {
-                "id": "ebbd1889-2944-4c8a-8d4e-7d227999d953",
+                "id": "2260f39d-a5f3-4f15-a015-6720a606d9b6",
                 "resource_type": "CPU",
                 "location": "Kampala, Central Region, UG",
                 "hourly_price": 0.0,
@@ -33,8 +33,8 @@
                     "cpu_min_mhz": 1700.0
                 },
                 "network": {
-                    "internal_ip": "10.10.162.186",
-                    "ssh": "ssh HP@0.tcp.in.ngrok.io -p 15853",
+                    "internal_ip": "192.168.244.33",
+                    "ssh": "ssh HP@0.tcp.in.ngrok.io -p 17817",
                     "open_ports": [
                         "22"
                     ],

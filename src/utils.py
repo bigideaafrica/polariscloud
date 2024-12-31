@@ -1,4 +1,5 @@
-# utils.py
+# src/utils.py
+
 import logging
 import os
 import platform
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from . import config
+from . import config  # Ensure config.py exists in the src/ directory
 
 
 def configure_logging():
@@ -29,12 +30,14 @@ def configure_logging():
     logger.addHandler(ch)
     
     # File handler
-    log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'polaris.log')
+    log_file = os.path.join(get_project_root(), 'logs', 'polaris.log')  # Corrected path
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)  # Ensure log directory exists
     fh = logging.FileHandler(log_file)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
     
     return logger
+
 
 def run_elevated(cmd):
     if platform.system().lower() == "windows":
@@ -53,6 +56,7 @@ def run_elevated(cmd):
     else:
         subprocess.run(['sudo', cmd], shell=True, check=True)
 
+
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -67,3 +71,13 @@ def get_local_ip():
             return socket.gethostbyname(hostname)
         except Exception:
             return '127.0.0.1'
+
+
+def get_project_root():
+    """
+    Determines the root directory of the project.
+    
+    Returns:
+        str: Absolute path to the project root.
+    """
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

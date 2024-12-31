@@ -34,7 +34,7 @@
                 },
                 "network": {
                     "internal_ip": "10.10.162.186",
-                    "ssh": "ssh HP@0.tcp.in.ngrok.io -p 12399",
+                    "ssh": "ssh HP@5.tcp.eu.ngrok.io -p 17615",
                     "open_ports": [
                         "22"
                     ],
