@@ -1,28 +1,40 @@
-# polaris_cli/start.py
+# src/start.py
 
 import os
 import platform
 import subprocess
 import sys
+import time
 
 import psutil
 from dotenv import load_dotenv
 from rich.console import Console
 
-from src.pid_manager import PID_FILE, create_pid_file, remove_pid_file
+from polaris_cli.repo_manager import ensure_repository_exists
+from src.pid_manager import create_pid_file, create_pid_file_for_process
+from src.pid_manager import read_pid
+from src.pid_manager import read_pid as read_pid_specific
+from src.pid_manager import remove_pid_file, remove_pid_file_for_process
 from src.utils import configure_logging, get_project_root
 
+# Initialize logging and console
 logger = configure_logging()
 console = Console()
 
-# Define DETACHED_PROCESS flag
+# Define DETACHED_PROCESS flag for Windows
 DETACHED_PROCESS = 0x00000008
-CREATE_NEW_CONSOLE = 0x00000010  # Not used in this revision
+
 
 def start_polaris():
     """
-    Starts the main.py process as a background process.
+    Starts both main.py processes as background processes.
     """
+    # Ensure the compute_subnet repository exists and get the path to compute_subnet/main.py
+    success, compute_main_py = ensure_repository_exists()
+    if not success:
+        console.print("[red]Failed to ensure the compute_subnet repository is available.[/red]")
+        sys.exit(1)
+    
     # Load .env file
     env_path = os.path.join(get_project_root(), '.env')
     load_dotenv(dotenv_path=env_path)
@@ -33,67 +45,68 @@ def start_polaris():
         console.print("[red]SSH_PASSWORD not found in .env file.[/red]")
         sys.exit(1)
 
-    # Check if PID file exists and if the process is running
-    if os.path.exists(PID_FILE):
-        try:
-            with open(PID_FILE, 'r') as f:
-                pid = int(f.read())
-            if psutil.pid_exists(pid):
-                console.print("[red]Polaris is already running.[/red]")
-                sys.exit(1)
-            else:
-                console.print("[yellow]Removing stale PID file.[/yellow]")
-                os.remove(PID_FILE)
-        except Exception as e:
-            console.print(f"[red]Error checking PID file: {e}[/red]")
-            sys.exit(1)
+    # Start src/main.py
+    start_process(
+        process_name='polaris',
+        script_path=os.path.join(get_project_root(), 'src', 'main.py'),
+        env={'SSH_PASSWORD': SSH_PASSWORD},
+        log_files=('polaris_stdout.log', 'polaris_stderr.log')
+    )
 
-    # Determine the operating system
-    current_os = platform.system()
+    # Start compute_subnet/main.py
+    start_process(
+        process_name='compute_subnet',
+        script_path=compute_main_py,
+        env={'SSH_PASSWORD': SSH_PASSWORD},
+        log_files=('compute_subnet_stdout.log', 'compute_subnet_stderr.log')
+    )
 
-    if current_os != 'Windows':
-        # Prompt for sudo password on Linux
-        console.print("[yellow]Polaris requires elevated privileges to run on Linux.[/yellow]")
-        console.print("[yellow]Please enter your sudo password when prompted.[/yellow]")
-        try:
-            # Execute 'sudo -v' to prompt for password and validate sudo access
-            subprocess.run(['sudo', '-v'], check=True)
-        except subprocess.CalledProcessError:
-            console.print("[red]Failed to authenticate with sudo. Please try again.[/red]")
-            sys.exit(1)
 
-    # Launch main.py as a separate process
+def start_process(process_name, script_path, env, log_files):
+    """
+    Starts a single process with the given parameters.
+    
+    Args:
+        process_name (str): Identifier for the process ('polaris' or 'compute_subnet').
+        script_path (str): Absolute path to the main.py script to execute.
+        env (dict): Environment variables to pass to the subprocess.
+        log_files (tuple): Tuple containing paths for stdout and stderr logs.
+    """
+    # Check if the process is already running
+    pid = read_pid_specific(process_name)
+    if pid and psutil.pid_exists(pid):
+        console.print(f"[red]{process_name} is already running with PID {pid}.[/red]")
+        return
+
+    # Define paths for log files
+    log_dir = os.path.join(get_project_root(), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    stdout_log = os.path.join(get_project_root(), 'logs', log_files[0])
+    stderr_log = os.path.join(get_project_root(), 'logs', log_files[1])
+
+    # Open log files
     try:
-        script_path = os.path.join(get_project_root(), 'src', 'main.py')
-        
-        # Ensure the script path exists
-        if not os.path.exists(script_path):
-            console.print(f"[red]main.py not found at {script_path}[/red]")
-            sys.exit(1)
-        
-        # Define paths for log files
-        log_dir = os.path.join(get_project_root(), 'logs')
-        os.makedirs(log_dir, exist_ok=True)
-        stdout_log = os.path.join(log_dir, 'polaris_stdout.log')
-        stderr_log = os.path.join(log_dir, 'polaris_stderr.log')
-        
-        # Open log files
         stdout_f = open(stdout_log, 'a')
         stderr_f = open(stderr_log, 'a')
-        
-        # Prepare environment variables for the subprocess
-        env = os.environ.copy()
-        env['SSH_PASSWORD'] = SSH_PASSWORD  # Pass SSH_PASSWORD to main.py
-        
-        if current_os == 'Windows':
-            # Windows-specific process creation with only DETACHED_PROCESS
+    except Exception as e:
+        console.print(f"[red]Failed to open log files for {process_name}: {e}[/red]")
+        logger.exception(f"Failed to open log files for {process_name}: {e}")
+        sys.exit(1)
+
+    # Prepare environment variables for the subprocess
+    subprocess_env = os.environ.copy()
+    subprocess_env.update(env)
+
+    try:
+        if platform.system() == 'Windows':
+            # Windows-specific process creation with DETACHED_PROCESS
             process = subprocess.Popen(
                 [sys.executable, script_path],
                 stdout=stdout_f,
                 stderr=stderr_f,
-                creationflags=DETACHED_PROCESS,  # Removed CREATE_NEW_CONSOLE
-                env=env,
-                close_fds=True  # Close file descriptors
+                creationflags=DETACHED_PROCESS,
+                env=subprocess_env,
+                close_fds=True
             )
         else:
             # Unix/Linux-specific process creation
@@ -103,87 +116,86 @@ def start_polaris():
                 stderr=stderr_f,               # Redirect stderr to log file
                 start_new_session=True,        # Detach the process from the parent
                 cwd=os.path.dirname(script_path),  # Set working directory
-                env=env,
+                env=subprocess_env,
                 close_fds=True
             )
-        
-        console.print("[green]Polaris started successfully.[/green]")
-        console.print(f"[blue]Logs: stdout -> {stdout_log}, stderr -> {stderr_log}[/blue]")
+
+        # Create PID file for the specific process
+        if create_pid_file_for_process(process_name, process.pid):
+            logger.info(f"Started {process_name} with PID: {process.pid}")
+            console.print(f"[green]{process_name} started successfully with PID {process.pid}.[/green]")
+            console.print(f"[blue]Logs: stdout -> {stdout_log}, stderr -> {stderr_log}[/blue]")
+        else:
+            console.print(f"[red]Failed to create PID file for {process_name}.[/red]")
+            sys.exit(1)
+
     except Exception as e:
-        console.print(f"[red]Failed to start Polaris: {e}[/red]")
+        console.print(f"[red]Failed to start {process_name}: {e}[/red]")
+        logger.exception(f"Failed to start {process_name}: {e}")
         sys.exit(1)
+
 
 def stop_polaris():
     """
-    Stops the running main.py process using the PID file.
+    Stops both running main.py processes using their PID files.
     """
-    if not os.path.exists(PID_FILE):
-        console.print("[yellow]Polaris is not running.[/yellow]")
-        sys.exit(0)
-    
-    try:
-        with open(PID_FILE, 'r') as f:
-            pid = int(f.read())
-    except Exception as e:
-        console.print(f"[red]Failed to read PID file: {e}[/red]")
-        sys.exit(1)
-    
-    try:
-        # Terminate the process gracefully
-        process = psutil.Process(pid)
-        process.terminate()
-        
-        # Wait for the process to terminate
-        process.wait(timeout=10)
-        
-        # Remove the PID file
-        if os.path.exists(PID_FILE):
-            os.remove(PID_FILE)
-        
-        console.print("[green]Polaris stopped successfully.[/green]")
-    except psutil.NoSuchProcess:
-        console.print("[yellow]Polaris process not found. Removing stale PID file.[/yellow]")
-        os.remove(PID_FILE)
-    except psutil.TimeoutExpired:
-        console.print("[yellow]Polaris did not terminate gracefully. Forcing termination.[/yellow]")
-        process.kill()
-        if os.path.exists(PID_FILE):
-            os.remove(PID_FILE)
-        console.print("[green]Polaris forcefully stopped.[/green]")
-    except Exception as e:
-        console.print(f"[red]Failed to stop Polaris: {e}[/red]")
-        sys.exit(1)
+    for process_name in ['polaris', 'compute_subnet']:
+        pid = read_pid_specific(process_name)
+        if not pid:
+            console.print(f"[yellow]{process_name} is not running.[/yellow]")
+            continue
+
+        try:
+            process = psutil.Process(pid)
+            console.print(f"[yellow]Terminating {process_name} (PID {pid})...[/yellow]")
+            process.terminate()
+
+            try:
+                process.wait(timeout=10)
+                console.print(f"[green]{process_name} (PID {pid}) stopped successfully.[/green]")
+            except psutil.TimeoutExpired:
+                console.print(f"[yellow]{process_name} did not terminate gracefully. Forcing termination.[/yellow]")
+                process.kill()
+                process.wait()
+                console.print(f"[green]{process_name} forcefully stopped.[/green]")
+        except psutil.NoSuchProcess:
+            console.print(f"[yellow]{process_name} process not found. Removing stale PID file.[/yellow]")
+        except Exception as e:
+            console.print(f"[red]Failed to stop {process_name}: {e}[/red]")
+            logger.exception(f"Failed to stop {process_name}: {e}")
+            continue
+
+        # Remove PID file
+        if remove_pid_file_for_process(process_name):
+            logger.info(f"Removed PID file for {process_name}.")
+        else:
+            console.print(f"[red]Failed to remove PID file for {process_name}.[/red]")
+
 
 def check_status():
     """
-    Checks if the Polaris background process is running.
+    Checks if both Polaris processes are running.
     """
-    if not os.path.exists(PID_FILE):
-        console.print("[yellow]Polaris is not running.[/yellow]")
-        sys.exit(0)
-    
-    try:
-        with open(PID_FILE, 'r') as f:
-            pid = int(f.read())
-    except Exception as e:
-        console.print(f"[red]Failed to read PID file: {e}[/red]")
-        sys.exit(1)
-    
-    try:
-        process = psutil.Process(pid)
-        if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
-            console.print("[green]Polaris is currently running.[/green]")
+    all_running = True
+    for process_name in ['polaris', 'compute_subnet']:
+        pid = read_pid_specific(process_name)
+        if pid and psutil.pid_exists(pid):
+            console.print(f"[green]{process_name} is running with PID {pid}.[/green]")
         else:
-            console.print("[yellow]Polaris process is not running. Removing stale PID file.[/yellow]")
-            os.remove(PID_FILE)
-            sys.exit(0)
-    except psutil.NoSuchProcess:
-        console.print("[yellow]Polaris process not found. Removing stale PID file.[/yellow]")
-        os.remove(PID_FILE)
+            console.print(f"[yellow]{process_name} is not running.[/yellow]")
+            all_running = False
+            # Optionally, remove stale PID files
+            if pid:
+                if remove_pid_file_for_process(process_name):
+                    logger.info(f"Removed stale PID file for {process_name}.")
+        # Short delay to prevent overwhelming the console
+        time.sleep(0.1)
+
+    if all_running:
         sys.exit(0)
-    except Exception as e:
-        console.print(f"[red]Error checking Polaris status: {e}[/red]")
+    else:
         sys.exit(1)
+
 
 def main():
     """
@@ -192,9 +204,9 @@ def main():
     if len(sys.argv) != 2:
         console.print("[red]Usage: polaris [start|stop|status][/red]")
         sys.exit(1)
-    
+
     command = sys.argv[1].lower()
-    
+
     if command == 'start':
         start_polaris()
     elif command == 'stop':
@@ -205,6 +217,7 @@ def main():
         console.print(f"[red]Unknown command: {command}[/red]")
         console.print("[red]Usage: polaris [start|stop|status][/red]")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

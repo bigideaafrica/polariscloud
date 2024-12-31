@@ -1,4 +1,4 @@
-# polaris_cli/repo_manager.py
+# src/repo_manager.py
 
 import os
 import shutil
@@ -8,6 +8,8 @@ from pathlib import Path
 import git
 from rich.console import Console
 
+from src.utils import get_project_root
+
 console = Console()
 
 REPO_URL = "https://github.com/bigideainc/polarise-compute-subnet"
@@ -15,11 +17,16 @@ REPO_FOLDER_NAME = "compute_subnet"
 
 def get_repo_path():
     """Get the path where the repository should be cloned."""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    project_root = get_project_root()
     return os.path.join(project_root, REPO_FOLDER_NAME)
 
 def ensure_repository_exists():
-    """Check if repository exists and clone if needed."""
+    """
+    Check if repository exists and clone if needed.
+    
+    Returns:
+        tuple: (success: bool, main_py_path: str or None)
+    """
     try:
         repo_path = get_repo_path()
         os.makedirs(repo_path, exist_ok=True)
@@ -44,7 +51,12 @@ def ensure_repository_exists():
         return False, None
 
 def update_repository():
-    """Update the repository to latest version."""
+    """
+    Update the repository to the latest version.
+    
+    Returns:
+        bool: True if update was successful, False otherwise.
+    """
     try:
         repo_path = get_repo_path()
         

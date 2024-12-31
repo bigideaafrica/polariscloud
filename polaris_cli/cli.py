@@ -1,4 +1,4 @@
-# polaris_cli/cli.py
+# src/cli.py
 
 import click
 
@@ -26,17 +26,17 @@ def view_pod_command():
 
 @cli.command()
 def start():
-    """Start Polaris as a background process."""
+    """Start Polaris and Compute Subnet as background processes."""
     start_polaris()
 
 @cli.command()
 def stop():
-    """Stop the running Polaris background process."""
+    """Stop Polaris and Compute Subnet background processes."""
     stop_polaris()
 
 @cli.command(name='status')
 def status():
-    """Check if Polaris is running."""
+    """Check if Polaris and Compute Subnet are running."""
     check_status()
 
 @cli.group(name='update')
