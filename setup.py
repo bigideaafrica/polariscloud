@@ -1,26 +1,19 @@
-from setuptools import find_packages, setup
+# setup.py
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+from setuptools import find_packages, setup
 
 setup(
     name='polaris-cli-tool',
-    version='1.0.10',  # Updated to version 1.0.10
+    version='1.0.7',
     description='Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources',
-    long_description=long_description,
-    long_description_content_type="text/markdown",
     author='Polaris Team',
-    author_email='mubarakabanadda68@gmail.com',
-    url='https://github.com/BANADDA/polaris-cli',
-    packages=find_packages(include=['polaris_cli', 'polaris_cli.*', 'src', 'src.*']),  # Explicitly include both packages
-    package_data={
-        'polaris_cli': ['*'],
-        'src': ['*'],
-    },
+    author_email='fred@polariscloud.ai',
+    url='https://github.com/bigideainc/polaris-subnet',
+    packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'click==8.1.3',
-        'tabulate==0.8.10',
+        'click',
+        'tabulate',
         'click-spinner',
         'rich',
         'inquirer',
@@ -29,8 +22,7 @@ setup(
         'pyyaml',
         'psutil',
         'python-dotenv',
-        'pid',
-        'communex==0.1.36.4',
+        'pid',  # Added pid package
     ],
     entry_points={
         'console_scripts': [

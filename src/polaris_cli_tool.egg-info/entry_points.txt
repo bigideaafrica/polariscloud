@@ -1,2 +1,0 @@
-[console_scripts]
-polaris = polaris_cli.cli:cli
