@@ -1,4 +1,4 @@
-# src/start.py
+# polaris/start.py
 
 import os
 import platform

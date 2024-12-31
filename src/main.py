@@ -1,5 +1,3 @@
-# src/main.py
-
 import ctypes
 import json
 import logging
@@ -14,7 +12,9 @@ import requests
 from src.ngrok_manager import NgrokManager
 from src.pid_manager import PID_FILE, create_pid_file, remove_pid_file
 from src.ssh_manager import SSHManager
+from src.sync_manager import SyncManager
 from src.system_info import get_system_info
+from src.user_manager import UserManager
 from src.utils import configure_logging, get_local_ip, get_project_root
 
 logger = configure_logging()
@@ -29,15 +29,11 @@ def is_admin():
 def run_as_admin():
     """
     Relaunch the current script with administrative privileges on Windows.
-    
-    Returns:
-        bool: True if the script was successfully relaunched, False otherwise.
     """
     try:
         script_path = os.path.abspath(__file__)
-        params = f'"{script_path}"'  # Ensure the script path is quoted
+        params = f'"{script_path}"'
         
-        # Relaunch the script with admin rights
         ctypes.windll.shell32.ShellExecuteW(
             None,
             "runas",
@@ -53,42 +49,71 @@ def run_as_admin():
         return False
 
 def create_ssh_directory_windows():
-    """
-    Create SSH directory on Windows with administrative privileges.
-    
-    Attempts multiple methods to ensure directory creation:
-    1. Using subprocess with admin rights
-    2. Using os.makedirs with elevated privileges
-    """
+    """Create SSH directory on Windows with administrative privileges."""
     ssh_dir = r'C:\ProgramData\ssh'
     
-    # Method 1: Use subprocess with admin rights
-    if run_as_admin_command(['mkdir', ssh_dir]):
-        logger.info(f"SSH directory created at {ssh_dir} using admin command.")
+    # Try using PowerShell commands first
+    try:
+        ps_command = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{ssh_dir}\'"'
+        subprocess.run(ps_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using PowerShell")
         return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"PowerShell directory creation failed: {e}")
     
-    # Method 2: Try os.makedirs with error handling
+    # Try using cmd.exe as fallback
+    try:
+        cmd_command = f'cmd /c mkdir "{ssh_dir}" 2>nul'
+        subprocess.run(cmd_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using cmd")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"CMD directory creation failed: {e}")
+    
+    # Try using os.makedirs as final fallback
     try:
         os.makedirs(ssh_dir, exist_ok=True)
-        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs.")
+        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs")
         return True
-    except PermissionError:
-        logger.warning("Permission denied when creating SSH directory.")
-        return False
     except Exception as e:
-        logger.exception(f"Failed to create SSH directory: {e}")
+        logger.error(f"Failed to create SSH directory: {e}")
+        return False
+
+def configure_ssh_windows():
+    """Configure SSH server on Windows."""
+    if not create_ssh_directory_windows():
+        logger.error("Failed to create SSH directory.")
+        return False
+    
+    commands = [
+        'powershell "Get-WindowsCapability -Online | Where-Object Name -like \'OpenSSH.Server*\'"',
+        'powershell "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"',
+        'powershell "Start-Service sshd"',
+        'powershell "Set-Service -Name sshd -StartupType Automatic"'
+    ]
+    
+    success = True
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0 and not "already installed" in result.stdout:
+                logger.error(f"Failed to execute SSH command: {cmd}\nError: {result.stderr}")
+                success = False
+                break
+        except Exception as e:
+            logger.error(f"Error executing SSH command: {cmd}\nError: {e}")
+            success = False
+            break
+
+    if success:
+        logger.info("SSH server configured successfully.")
+        return True
+    else:
+        logger.error("SSH server configuration failed.")
         return False
 
 def run_as_admin_command(command):
-    """
-    Run a command with administrative privileges on Windows.
-    
-    Args:
-        command (list): Command to run with arguments
-    
-    Returns:
-        bool: True if command was successful, False otherwise
-    """
+    """Run a command with administrative privileges."""
     try:
         result = subprocess.run(
             command,
@@ -101,45 +126,14 @@ def run_as_admin_command(command):
             logger.error(f"Command '{' '.join(command)}' failed with error: {result.stderr.strip()}")
             return False
         
-        logger.debug(f"Command '{' '.join(command)}' executed successfully with output: {result.stdout.strip()}")
+        logger.debug(f"Command '{' '.join(command)}' executed successfully.")
         return True
     except Exception as e:
         logger.exception(f"Error running command '{' '.join(command)}': {e}")
         return False
 
-def configure_ssh_windows():
-    """
-    Configure SSH server on Windows.
-    
-    This involves:
-    1. Ensuring SSH directory exists
-    2. Configuring SSH service
-    3. Potentially creating SSH configuration files
-    """
-    # Create SSH directory
-    if not create_ssh_directory_windows():
-        logger.error("Failed to create SSH directory.")
-        return False
-    
-    # Configure SSH service
-    commands = [
-        'powershell "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"',
-        'powershell "Start-Service sshd"',
-        'powershell "Set-Service -Name sshd -StartupType Automatic"'
-    ]
-    
-    for cmd in commands:
-        if not run_as_admin_command(cmd.split()):
-            logger.error(f"Failed to execute SSH configuration command: {cmd}")
-            return False
-    
-    logger.info("SSH server configured successfully.")
-    return True
-
 def setup_firewall_windows():
-    """
-    Configure Windows Firewall to allow SSH connections.
-    """
+    """Configure Windows Firewall to allow SSH connections."""
     firewall_cmd = 'netsh advfirewall firewall add rule name="OpenSSH" dir=in action=allow protocol=TCP localport=22'
     if run_as_admin_command(firewall_cmd.split()):
         logger.info("Windows Firewall configured to allow SSH connections on port 22.")
@@ -148,17 +142,48 @@ def setup_firewall_windows():
         logger.warning("Failed to configure Windows Firewall for SSH. SSH access might be blocked.")
         return False
 
-def save_system_info(data, filename='system_info.json'):
+def format_network_info(username: str, password: str, host: str, port: int) -> dict:
+    """Format network information according to API requirements."""
+    return {
+        "internal_ip": str(get_local_ip()),  # Ensure string type
+        "ssh": f"ssh://{username}@{host}:{port}",
+        "open_ports": ["22"],  # Always a list of strings
+        "password": str(password),
+        "username": str(username)  # Ensure string type
+    }
+
+def save_and_sync_info(system_info, filename='system_info.json'):
+    """Save system info and sync network details."""
     try:
-        # Always save in project root directory
+        # Save system info
         root_dir = get_project_root()
         abs_path = os.path.join(root_dir, filename)
         with open(abs_path, 'w') as f:
-            json.dump(data, f, indent=4)
+            json.dump([system_info], f, indent=4)
         logger.debug(f"System information saved to {abs_path}")
+
+        # Check for existing registration silently
+        user_manager = UserManager()
+        has_registration, user_info = user_manager.check_existing_registration(show_prompt=False)
+        
+        if has_registration and user_info:
+            # Sync network information
+            sync_manager = SyncManager()
+            if sync_manager.sync_network_info():
+                logger.info("Network information synchronized successfully")
+                
+                # Verify sync status
+                overall_status, component_status = sync_manager.verify_sync_status()
+                if not overall_status:
+                    logger.warning("Sync verification failed:")
+                    for component, status in component_status.items():
+                        logger.warning(f"- {component}: {'Success' if status else 'Failed'}")
+            else:
+                logger.warning("Failed to synchronize network information")
+
         return abs_path
     except Exception as e:
-        logger.exception(f"Failed to save system info: {e}")
+        logger.exception(f"Failed to save and sync system info: {e}")
         return None
 
 def handle_shutdown(signum, frame):
@@ -169,48 +194,44 @@ def main():
     logger.debug("Starting Polaris main function.")
     
     # Ensure admin rights
-    logger.debug("Checking for administrative privileges.")
     if not is_admin():
         logger.warning("Restarting script with administrative privileges...")
         if run_as_admin():
             logger.info("Relaunching Polaris with administrative privileges.")
-            sys.exit(0)  # Exit the non-admin process
+            sys.exit(0)
         else:
             logger.error("Unable to obtain administrative privileges.")
             sys.exit(1)
 
-    # Create PID file to ensure only one instance runs
-    logger.debug(f"Creating PID file at {PID_FILE}.")
+    # Create PID file
     if not create_pid_file():
         logger.error("Polaris is already running or failed to create PID file.")
         sys.exit(1)
     
-    # Setup signal handlers for graceful shutdown
+    # Setup signal handlers
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
     
-    ngrok = None  # Initialize outside try block for cleanup
+    ngrok = None
     try:
-        # Windows-specific SSH setup
-        logger.debug("Configuring SSH on Windows.")
+        # Configure SSH
         if not configure_ssh_windows():
             logger.error("Failed to configure SSH on Windows.")
             sys.exit(1)
         
         # Setup firewall
-        logger.debug("Setting up Windows Firewall for SSH.")
         if not setup_firewall_windows():
             logger.warning("Could not configure firewall. SSH access might be blocked.")
         
         while True:
             # Get system information
-            system_info = get_system_info("CPU")  # or "GPU" based on your needs
+            system_info = get_system_info("CPU")
             
             # Initialize managers
             ngrok = NgrokManager()
             ssh = SSHManager()
             
-            # Get SSH credentials
+            # Setup SSH user
             logger.debug("Setting up SSH user.")
             username, password = ssh.setup_user()
             if not username or not password:
@@ -222,33 +243,37 @@ def main():
             host, port = ngrok.start_tunnel(22)
             if not host or not port:
                 logger.error("Failed to start ngrok tunnel.")
-                break  # Exit the loop if ngrok fails to start
-            
-            # Add network info
-            network_info = {
-                "internal_ip": get_local_ip(),
-                "ssh": f"ssh {username}@{host} -p {port}",
-                "open_ports": ["22"],
-                "password": password,
-                "username": username
-            }
+                break
+
+            # Create network info
+            network_info = format_network_info(
+                username=username,
+                password=password,
+                host=host,
+                port=port
+            )
             
             if system_info and "compute_resources" in system_info:
                 system_info["compute_resources"][0]["network"] = network_info
             
-            # Save system information
-            file_path = save_system_info([system_info])
+            # Save and sync system information
+            file_path = save_and_sync_info(system_info)
             
             if file_path:
                 logger.info("\n" + "="*50)
                 logger.info(f"System information saved to: {file_path}")
-                logger.info(f"SSH Command: ssh {username}@{host} -p {port}")
-                logger.info(f"Password: {password}")
+                
+                user_manager = UserManager()
+                user_info = user_manager.get_user_info()
+                if user_info and 'network_info' in user_info:
+                    network = user_info['network_info']
+                    logger.info(f"SSH Command: {network.get('ssh', 'N/A')}")
+                    logger.info(f"Password: {network.get('password', 'N/A')}")
                 logger.info("="*50 + "\n")
             else:
-                logger.error("Failed to save system information.")
+                logger.error("Failed to save and sync system information")
             
-            # Monitor ngrok tunnel status
+            # Monitor ngrok tunnel
             while True:
                 try:
                     r = requests.get("http://localhost:4040/api/tunnels", timeout=5)
@@ -258,31 +283,40 @@ def main():
                         host, port = ngrok.start_tunnel(22)
                         if not host or not port:
                             logger.error("Failed to restart ngrok tunnel.")
-                            break  # Exit the inner loop to restart the outer loop
-                        network_info["ssh"] = f"ssh {username}@{host} -p {port}"
+                            break
+                        network_info = format_network_info(
+                            username=username,
+                            password=password,
+                            host=host,
+                            port=port
+                        )
                         system_info["compute_resources"][0]["network"] = network_info
-                        save_system_info([system_info])
-                    time.sleep(10)  # Check every 10 seconds
+                        save_and_sync_info(system_info)
+                    time.sleep(10)
                 except Exception as e:
                     logger.warning(f"Tunnel check failed: {e}. Restarting...")
                     try:
                         host, port = ngrok.start_tunnel(22)
                         if not host or not port:
                             logger.error("Failed to restart ngrok tunnel.")
-                            break  # Exit the inner loop to restart the outer loop
-                        network_info["ssh"] = f"ssh {username}@{host} -p {port}"
+                            break
+                        network_info = format_network_info(
+                            username=username,
+                            password=password,
+                            host=host,
+                            port=port
+                        )
                         system_info["compute_resources"][0]["network"] = network_info
-                        save_system_info([system_info])
+                        save_and_sync_info(system_info)
                     except Exception as restart_error:
                         logger.error(f"Failed to restart tunnel: {restart_error}")
-                    time.sleep(15)  # Wait before retrying
+                    time.sleep(15)
                 
     except KeyboardInterrupt:
         logger.info("\nShutdown requested. Cleaning up...")
     except Exception as e:
         logger.exception(f"Error during setup: {e}")
     finally:
-        # Clean shutdown
         if ngrok:
             logger.info("Stopping ngrok tunnel...")
             ngrok.kill_existing()

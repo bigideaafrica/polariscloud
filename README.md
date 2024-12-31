@@ -1,14 +1,3 @@
-Metadata-Version: 2.1
-Name: polaris-cli-tool
-Version: 1.0.10
-Summary: Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
-Home-page: https://github.com/BANADDA/polaris-cli
-Author: Polaris Team
-Author-email: Polaris Team <mubarakabanadda68@gmail.com>
-License: MIT
-Requires-Python: >=3.6
-Description-Content-Type: text/markdown
-
 # Polaris CLI Tool
 
 A modern development workspace manager for distributed compute resources.

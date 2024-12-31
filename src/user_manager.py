@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.prompt import Confirm
 
 console = Console()
@@ -16,7 +17,9 @@ class UserManager:
         self.user_file = self.project_root / 'user_info.json'
 
     def save_user_info(self, miner_id: str, username: str, network_info: Dict) -> bool:
-        """Save user registration information."""
+        """
+        Save user registration information.
+        """
         try:
             user_data = {
                 'miner_id': miner_id,
@@ -31,7 +34,9 @@ class UserManager:
             return False
 
     def get_user_info(self) -> Optional[Dict]:
-        """Retrieve saved user information."""
+        """
+        Retrieve saved user information.
+        """
         try:
             if self.user_file.exists():
                 with open(self.user_file, 'r') as f:
@@ -41,25 +46,37 @@ class UserManager:
             console.print(f"[red]Failed to read user information: {e}[/red]")
             return None
 
-    def check_existing_registration(self) -> Tuple[bool, Optional[Dict]]:
-        """Check if there's an existing registration and handle user choice."""
+    def check_existing_registration(self, show_prompt: bool = True) -> Tuple[bool, Optional[Dict]]:
+        """
+        Check if there's an existing registration and handle user choice.
+        
+        Args:
+            show_prompt: If True, shows the prompt for existing registration (used during registration)
+                       If False, just checks existence (used during start)
+        """
         user_info = self.get_user_info()
         if user_info:
-            console.print(Panel(
-                f"[yellow]Existing registration found:[/yellow]\n"
-                f"Miner ID: {user_info['miner_id']}\n"
-                f"Username: {user_info['username']}",
-                title="⚠️ Existing Registration",
-                border_style="yellow"
-            ))
-            
-            if Confirm.ask("Do you want to proceed with a new registration?", default=False):
+            if show_prompt:
+                console.print(Panel(
+                    f"[yellow]Existing registration found:[/yellow]\n"
+                    f"Miner ID: {user_info['miner_id']}\n"
+                    f"Username: {user_info['username']}",
+                    title="⚠️ Existing Registration",
+                    border_style="yellow"
+                ))
+                
+                if not Confirm.ask("Do you want to proceed with a new registration?", default=False):
+                    return True, user_info
                 return False, None
-            return True, user_info
+            else:
+                # For start command, just return the existing registration
+                return True, user_info
         return False, None
 
     def update_network_info(self, network_info: Dict) -> bool:
-        """Update network information for existing user."""
+        """
+        Update network information for existing user.
+        """
         user_info = self.get_user_info()
         if user_info:
             user_info['network_info'] = network_info
@@ -71,7 +88,9 @@ class UserManager:
         return False
 
     def clear_user_info(self) -> bool:
-        """Clear saved user information."""
+        """
+        Clear saved user information.
+        """
         try:
             if self.user_file.exists():
                 os.remove(self.user_file)
