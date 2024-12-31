@@ -1,60 +1,22 @@
 Metadata-Version: 2.1
 Name: polaris-cli-tool
-Version: 1.0.10
+Version: 1.0.7
 Summary: Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
-Home-page: https://github.com/BANADDA/polaris-cli
+Home-page: https://github.com/bigideainc/polaris-subnet
 Author: Polaris Team
-Author-email: Polaris Team <mubarakabanadda68@gmail.com>
-License: MIT
+Author-email: fred@polariscloud.ai
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
-Description-Content-Type: text/markdown
-
-# Polaris CLI Tool
-
-A modern development workspace manager for distributed compute resources.
-
-## Features
-
-- Register and manage compute resources
-- Monitor system status
-- Manage SSH connections
-- Automated tunnel setup
-- Cross-platform support
-
-## Installation
-
-```bash
-pip install polaris-cli-tool
-```
-
-## Usage
-
-```bash
-# Start the service
-polaris start
-
-# Register a new miner
-polaris register
-
-# View compute resources
-polaris view-compute
-
-# Check status
-polaris status
-
-# Stop the service
-polaris stop
-```
-
-## Requirements
-
-- Python 3.6 or higher
-- Windows, Linux, or macOS
-
-## License
-
-MIT License
-
-## Author
-
-Polaris Team (fred@polariscloud.ai)
+Requires-Dist: click
+Requires-Dist: tabulate
+Requires-Dist: click-spinner
+Requires-Dist: rich
+Requires-Dist: inquirer
+Requires-Dist: requests
+Requires-Dist: xlsxwriter
+Requires-Dist: pyyaml
+Requires-Dist: psutil
+Requires-Dist: python-dotenv
+Requires-Dist: pid
