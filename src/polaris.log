@@ -3745,3 +3745,440 @@ psutil.NoSuchProcess: process no longer exists (pid=12448)
 2024-12-30 18:27:43,026 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000219FDF58190>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
 2024-12-30 18:27:43,977 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001343082F7D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
 2024-12-30 18:27:45,567 [WARNING] No active tunnels found. Restarting ngrok...
+2024-12-30 19:10:10,864 [ERROR] Failed to run command mkdir -p /etc/ssh: [WinError 2] The system cannot find the file specified
+2024-12-30 19:10:10,864 [INFO] Stopping ngrok tunnel...
+2024-12-30 19:10:13,071 [INFO] Shutdown complete.
+2024-12-30 19:10:15,991 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000023B2012AED0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 19:10:17,657 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001EC8D98A1D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 19:10:18,666 [WARNING] No active tunnels found. Restarting ngrok...
+2024-12-30 19:10:18,720 [WARNING] No active tunnels found. Restarting ngrok...
+2024-12-30 19:10:43,244 [INFO] System information loaded successfully.
+2024-12-30 19:10:43,244 [INFO] System information loaded successfully.
+2024-12-30 19:10:43,244 [INFO] System information loaded successfully.
+2024-12-30 19:10:43,244 [INFO] System information loaded successfully.
+2024-12-30 19:10:58,932 [INFO] 'stepping' was None for resource 164cd08a-4cee-4b22-9040-2656a171c173. Set to 1.
+2024-12-30 19:10:58,932 [INFO] 'stepping' was None for resource 164cd08a-4cee-4b22-9040-2656a171c173. Set to 1.
+2024-12-30 19:10:58,932 [INFO] 'stepping' was None for resource 164cd08a-4cee-4b22-9040-2656a171c173. Set to 1.
+2024-12-30 19:10:58,932 [INFO] 'stepping' was None for resource 164cd08a-4cee-4b22-9040-2656a171c173. Set to 1.
+2024-12-30 19:10:58,933 [INFO] Reformatted 'ssh' for resource 164cd08a-4cee-4b22-9040-2656a171c173: ssh://HP@0.tcp.in.ngrok.io:11778
+2024-12-30 19:10:58,933 [INFO] Reformatted 'ssh' for resource 164cd08a-4cee-4b22-9040-2656a171c173: ssh://HP@0.tcp.in.ngrok.io:11778
+2024-12-30 19:10:58,933 [INFO] Reformatted 'ssh' for resource 164cd08a-4cee-4b22-9040-2656a171c173: ssh://HP@0.tcp.in.ngrok.io:11778
+2024-12-30 19:10:58,933 [INFO] Reformatted 'ssh' for resource 164cd08a-4cee-4b22-9040-2656a171c173: ssh://HP@0.tcp.in.ngrok.io:11778
+2024-12-30 19:10:58,933 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 164cd08a-4cee-4b22-9040-2656a171c173.
+2024-12-30 19:10:58,933 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 164cd08a-4cee-4b22-9040-2656a171c173.
+2024-12-30 19:10:58,933 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 164cd08a-4cee-4b22-9040-2656a171c173.
+2024-12-30 19:10:58,933 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource 164cd08a-4cee-4b22-9040-2656a171c173.
+2024-12-30 19:10:58,933 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "164cd08a-4cee-4b22-9040-2656a171c173",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:11778",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 19:10:58,933 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "164cd08a-4cee-4b22-9040-2656a171c173",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:11778",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 19:10:58,933 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "164cd08a-4cee-4b22-9040-2656a171c173",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:11778",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 19:10:58,933 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "164cd08a-4cee-4b22-9040-2656a171c173",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:11778",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 19:11:00,466 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 19:11:00,466 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 19:11:00,466 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 19:11:00,466 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 19:50:53,091 [ERROR] Failed to run command mkdir -p /etc/ssh: [WinError 2] The system cannot find the file specified
+2024-12-30 19:50:53,092 [INFO] Stopping ngrok tunnel...
+2024-12-30 19:50:55,292 [INFO] Shutdown complete.
+2024-12-30 19:51:02,696 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000219FDF47E90>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 19:51:02,754 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000134308157D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 19:51:04,649 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000023B20116450>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 19:51:05,160 [WARNING] No active tunnels found. Restarting ngrok...
+2024-12-30 19:53:00,170 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\gpu.json'
+2024-12-30 19:53:00,170 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\gpu.json'
+2024-12-30 19:53:00,170 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\gpu.json'
+2024-12-30 19:53:00,170 [ERROR] Error retrieving miner UID: [Errno 2] No such file or directory: 'C:\\Users\\HP\\.commune\\key\\gpu.json'
+2024-12-30 20:00:25,696 [ERROR] Failed to run command mkdir -p /etc/ssh: [WinError 2] The system cannot find the file specified
+2024-12-30 20:00:25,696 [INFO] Stopping ngrok tunnel...
+2024-12-30 20:00:27,859 [INFO] Shutdown complete.
+2024-12-30 20:00:29,434 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001EC8D988F90>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 20:00:31,810 [WARNING] No active tunnels found. Restarting ngrok...
+2024-12-30 20:00:32,014 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x00000219FDF5B4D0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 20:00:33,641 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000023B20129310>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
+2024-12-30 20:00:35,833 [INFO] System information loaded successfully.
+2024-12-30 20:00:35,833 [INFO] System information loaded successfully.
+2024-12-30 20:00:35,833 [INFO] System information loaded successfully.
+2024-12-30 20:00:35,833 [INFO] System information loaded successfully.
+2024-12-30 20:04:16,183 [INFO] 'stepping' was None for resource ebbd1889-2944-4c8a-8d4e-7d227999d953. Set to 1.
+2024-12-30 20:04:16,183 [INFO] 'stepping' was None for resource ebbd1889-2944-4c8a-8d4e-7d227999d953. Set to 1.
+2024-12-30 20:04:16,183 [INFO] 'stepping' was None for resource ebbd1889-2944-4c8a-8d4e-7d227999d953. Set to 1.
+2024-12-30 20:04:16,183 [INFO] 'stepping' was None for resource ebbd1889-2944-4c8a-8d4e-7d227999d953. Set to 1.
+2024-12-30 20:04:16,185 [INFO] Reformatted 'ssh' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953: ssh://HP@0.tcp.in.ngrok.io:10598
+2024-12-30 20:04:16,185 [INFO] Reformatted 'ssh' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953: ssh://HP@0.tcp.in.ngrok.io:10598
+2024-12-30 20:04:16,185 [INFO] Reformatted 'ssh' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953: ssh://HP@0.tcp.in.ngrok.io:10598
+2024-12-30 20:04:16,185 [INFO] Reformatted 'ssh' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953: ssh://HP@0.tcp.in.ngrok.io:10598
+2024-12-30 20:04:16,186 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953.
+2024-12-30 20:04:16,186 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953.
+2024-12-30 20:04:16,186 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953.
+2024-12-30 20:04:16,186 [INFO] Parsed and converted 'online_cpus' to range string '0-11' for resource ebbd1889-2944-4c8a-8d4e-7d227999d953.
+2024-12-30 20:04:16,187 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "ebbd1889-2944-4c8a-8d4e-7d227999d953",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:10598",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 20:04:16,187 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "ebbd1889-2944-4c8a-8d4e-7d227999d953",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:10598",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 20:04:16,187 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "ebbd1889-2944-4c8a-8d4e-7d227999d953",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:10598",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 20:04:16,187 [INFO] Submitting registration with data: {
+  "name": "hp_user",
+  "location": "Kampala, Central Region, UG",
+  "description": "Registered via Polaris CLI tool",
+  "compute_resources": [
+    {
+      "id": "ebbd1889-2944-4c8a-8d4e-7d227999d953",
+      "resource_type": "CPU",
+      "location": "Kampala, Central Region, UG",
+      "hourly_price": 0.0,
+      "ram": "15.68GB",
+      "storage": {
+        "type": "SSD",
+        "capacity": "419.82GB",
+        "read_speed": "550MB/s",
+        "write_speed": "520MB/s"
+      },
+      "cpu_specs": {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "64 bits",
+        "byte_order": "Little Endian",
+        "total_cpus": 12,
+        "online_cpus": "0-11",
+        "vendor_id": "GenuineIntel",
+        "cpu_name": "12th Gen Intel(R) Core(TM) i7-1255U",
+        "cpu_family": 198,
+        "model": 0,
+        "threads_per_core": 1,
+        "cores_per_socket": 10,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 1700.0,
+        "cpu_min_mhz": 1700.0
+      },
+      "network": {
+        "internal_ip": "10.10.162.186",
+        "ssh": "ssh://HP@0.tcp.in.ngrok.io:10598",
+        "password": "*****",
+        "username": "HP",
+        "open_ports": [
+          "22"
+        ]
+      }
+    }
+  ]
+}
+2024-12-30 20:04:17,480 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 20:04:17,480 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 20:04:17,480 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 20:04:17,480 [INFO] Removed c:\users\hp\documents\remote_access_tool\system_info.json after registration.
+2024-12-30 20:08:46,836 [ERROR] Failed to run command mkdir -p /etc/ssh: [WinError 2] The system cannot find the file specified
+2024-12-30 20:08:46,836 [INFO] Stopping ngrok tunnel...
+2024-12-30 20:08:49,039 [INFO] Shutdown complete.
+2024-12-30 20:08:50,080 [WARNING] Tunnel check failed: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000023B20135710>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it')). Restarting...
