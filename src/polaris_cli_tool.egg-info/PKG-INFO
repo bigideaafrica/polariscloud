@@ -1,13 +1,26 @@
 Metadata-Version: 2.1
 Name: polaris-cli-tool
-Version: 1.0.10
+Version: 1.0.7
 Summary: Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
-Home-page: https://github.com/BANADDA/polaris-cli
-Author: Polaris Team
 Author-email: Polaris Team <mubarakabanadda68@gmail.com>
-License: MIT
+Project-URL: Homepage, https://github.com/BANADDA/polaris-cli
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
+Requires-Dist: click==8.1.3
+Requires-Dist: tabulate==0.8.10
+Requires-Dist: click-spinner
+Requires-Dist: rich
+Requires-Dist: inquirer
+Requires-Dist: requests
+Requires-Dist: xlsxwriter
+Requires-Dist: pyyaml
+Requires-Dist: psutil
+Requires-Dist: python-dotenv
+Requires-Dist: pid
+Requires-Dist: communex==0.1.36.4
 
 # Polaris CLI Tool
 

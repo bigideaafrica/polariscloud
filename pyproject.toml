@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polaris-cli-tool"
+version = "1.0.10"  # Updated to version 1.0.10
+description = "Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources"
+readme = "README.md"
+authors = [{name = "Polaris Team", email = "mubarakabanadda68@gmail.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.6"
+
+[tool.setuptools]
+packages = ["polaris_cli", "src"]
