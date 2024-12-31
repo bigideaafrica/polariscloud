@@ -1,5 +1,4 @@
 README.md
-pyproject.toml
 setup.py
 polaris_cli/__init__.py
 polaris_cli/cli.py
@@ -12,6 +11,8 @@ polaris_cli/view_pod.py
 polaris_cli_tool.egg-info/PKG-INFO
 polaris_cli_tool.egg-info/SOURCES.txt
 polaris_cli_tool.egg-info/dependency_links.txt
+polaris_cli_tool.egg-info/entry_points.txt
+polaris_cli_tool.egg-info/requires.txt
 polaris_cli_tool.egg-info/top_level.txt
 src/__init__.py
 src/config.py
@@ -20,7 +21,6 @@ src/network_format.py
 src/network_sync.py
 src/ngrok_manager.py
 src/pid_manager.py
-src/polaris.log
 src/ssh_manager.py
 src/sync_manager.py
 src/system_info.py
