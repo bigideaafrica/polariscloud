@@ -32,7 +32,7 @@ Ensure you have **Python 3.6** or higher installed. Then, install the required d
 pip install -r requirements.txt
 ```
 
-Alternatively, you can install Polaris in editable mode:
+Install Polaris in editable mode:
 
 ```bash
 pip install -e .
