@@ -169,7 +169,7 @@ def start_process(process_name, script_path, env_vars=None):
         return False
 
 def start_polaris():
-    """Start both Polaris processes"""
+    """Start both Polaris and Compute Subnet processes"""
     ensure_pid_directory()
 
     # Load environment variables
@@ -193,6 +193,13 @@ def start_polaris():
         # If compute_subnet fails, stop polaris as well
         stop_polaris()
         sys.exit(1)
+
+    # Start heartbeat service with corrected path
+    heartbeat_script = os.path.join(get_project_root(), 'polaris_cli', 'heartbeat_service.py')
+    logger.info(f"Starting heartbeat service from path: {heartbeat_script}")
+    if not start_process('heartbeat', heartbeat_script, {'SSH_PASSWORD': ssh_password}):
+        console.print("[yellow]Warning: Failed to start heartbeat service.[/yellow]")
+        logger.error("Failed to start heartbeat service")
 
 def stop_process(pid, process_name, force=False):
     """Stop a single process with privilege handling"""
@@ -232,11 +239,11 @@ def stop_process(pid, process_name, force=False):
         return False
 
 def stop_polaris():
-    """Stop both Polaris processes"""
+    """Stop all Polaris processes"""
     success = True
     
     # Stop processes in reverse order
-    for process_name in ['compute_subnet', 'polaris']:
+    for process_name in ['compute_subnet', 'polaris', 'heartbeat']:
         pid = read_pid(process_name)
         if not pid:
             console.print(f"[yellow]{process_name} is not running.[/yellow]")
@@ -258,7 +265,7 @@ def stop_polaris():
 
 def check_status():
     """Check if processes are running"""
-    processes = ['polaris', 'compute_subnet']
+    processes = ['polaris', 'compute_subnet', 'heartbeat']
     all_running = True
 
     for process_name in processes:
