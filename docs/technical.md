@@ -1,868 +1,603 @@
-# Technical Documentation: Heartbeat Monitoring System
+```markdown
+# Polaris CLI Tool - Heartbeat Service
 
 ## Table of Contents
-- [Technical Documentation: Heartbeat Monitoring System](#technical-documentation-heartbeat-monitoring-system)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [System Architecture Overview](#system-architecture-overview)
-  - [Core Components](#core-components)
-    - [Heartbeat Signal Lifecycle](#heartbeat-signal-lifecycle)
-    - [1. HeartbeatStore Initialization and State Management](#1-heartbeatstore-initialization-and-state-management)
-    - [2. Health Check Implementation](#2-health-check-implementation)
-    - [3. Heartbeat Recording and Database Operations](#3-heartbeat-recording-and-database-operations)
-    - [4. Status Change Recording](#4-status-change-recording)
-    - [5. Historical Data Cleanup](#5-historical-data-cleanup)
-    - [6. Heartbeat API Endpoint Handler](#6-heartbeat-api-endpoint-handler)
-    - [7. Critical Data Structures](#7-critical-data-structures)
-  - [Component Interactions](#component-interactions)
-  - [Error Handling and Logging](#error-handling-and-logging)
-    - [Error Flow](#error-flow)
-  - [Database Schema](#database-schema)
-    - [Error Handling Strategies](#error-handling-strategies)
-    - [Logging Levels](#logging-levels)
-  - [Concurrency and Asynchronous Operations](#concurrency-and-asynchronous-operations)
-    - [Background Tasks](#background-tasks)
-    - [Task Management](#task-management)
-  - [Data Models](#data-models)
-    - [MinerHeartbeatStatus](#minerheartbeatstatus)
-    - [SystemMetrics](#systemmetrics)
-    - [HeartbeatRequest](#heartbeatrequest)
-    - [HeartbeatResponse](#heartbeatresponse)
-  - [Database Operations](#database-operations)
-    - [Firestore Collections](#firestore-collections)
-    - [Query Operations](#query-operations)
-    - [Batch Operations](#batch-operations)
-  - [API Endpoints](#api-endpoints)
-    - [`/heart_beat` (POST)](#heart_beat-post)
-    - [`/miners/heartbeat_status` (GET)](#minersheartbeat_status-get)
-  - [Application Lifecycle](#application-lifecycle)
-    - [Startup](#startup)
-    - [Shutdown](#shutdown)
-    - [Running the Application](#running-the-application)
-    - [Log Management](#log-management)
-    - [Process Management](#process-management)
+
+1. [Overview](#overview)
+2. [Module: `heartbeat_service.py`](#module-heartbeat_servicepy)
+    - [Imports and Dependencies](#imports-and-dependencies)
+    - [Logging Configuration](#logging-configuration)
+    - [Class: `HeartbeatService`](#class-heartbeatservice)
+        - [Initialization (`__init__`)](#initialization-init)
+        - [_get_miner_id Method](#_get_miner_id-method)
+        - [_get_system_metrics Method](#_get_system_metrics-method)
+        - [initialize Method](#initialize-method)
+        - [send_heartbeat Method](#send_heartbeat-method)
+        - [run Method](#run-method)
+        - [stop Method](#stop-method)
+    - [Function: `main`](#function-main)
+3. [Workflow](#workflow)
+4. [Error Handling](#error-handling)
+5. [Integration with Other Modules](#integration-with-other-modules)
+6. [Conclusion](#conclusion)
 
 ---
 
-## Introduction
+## Overview
 
-The **Heartbeat Monitoring System** is designed to oversee the operational status of a fleet of miners within a compute subnet. By receiving periodic heartbeat signals from each miner, the system ensures real-time monitoring, detects anomalies, and maintains historical records for analysis and auditing purposes. This document delves into the technical intricacies of the system, elucidating how each component functions individually and in concert with others to deliver a robust monitoring solution.
+The **Heartbeat Service** is a critical component of the Polaris CLI tool, responsible for regularly sending system metrics and status updates (heartbeats) to a remote orchestrator server. This ensures that the orchestrator is aware of the compute resources' health and availability, facilitating effective management and monitoring.
 
-## System Architecture Overview
+---
 
-```mermaid
-flowchart TB
-    M[Miner] -->|HeartbeatRequest| API[FastAPI Endpoints]
-    API -->|record_heartbeat| HS[HeartbeatStore]
-    API -->|verify_miner| MS[MinerService]
-    HS -->|Cache| MC[miner_heartbeats Dict]
-    HS -->|Store| HR[HeartbeatRepository]
-    HS -->|Monitor| HC[Health Check Task]
-    HR -->|Write| FS[(Firestore)]
-    subgraph "Firestore Collections"
-        MS1[miner_states]
-        MS2[status_history]
-        MS3[metrics_history]
-    end
-    FS --> MS1
-    FS --> MS2
-    FS --> MS3
-```
+## Module: `heartbeat_service.py`
 
-At a high level, the Heartbeat Monitoring System comprises the following key components:
+This module encapsulates the functionality required to collect system metrics and send periodic heartbeat signals to a predefined server endpoint. It leverages asynchronous programming for efficient operation and integrates seamlessly with other components like user management and utility functions.
 
-1. **API Layer**: Exposes endpoints for miners to send heartbeat signals and for administrators to query miner statuses.
-2. **HeartbeatStore**: Manages in-memory state tracking of miner heartbeats and orchestrates periodic health checks.
-3. **HeartbeatRepository**: Interfaces with Firestore to persist heartbeat data, status changes, and historical metrics.
-4. **HeartbeatService**: Processes incoming heartbeats, determines miner statuses, and handles investigations for offline miners.
-5. **Data Models**: Defines the structure of heartbeat requests, responses, and associated metrics using Pydantic models.
-6. **Main Application**: Initializes the FastAPI application, configures middleware, and manages startup and shutdown events.
-
-The interplay between these components ensures efficient tracking, timely detection of offline miners, and seamless data persistence.
-
-```mermaid
-sequenceDiagram
-    participant Miner
-    participant API as HeartbeatController
-    participant Store as HeartbeatStore
-    participant DB as HeartbeatRepository
-    participant FS as Firestore
-
-    Miner->>API: POST /heart_beat
-    Note over API: Validate HeartbeatRequest
-    API->>Store: record_heartbeat(miner_id, timestamp)
-    Store-->>Store: Update miner_heartbeats
-    API->>DB: record_heartbeat(status, metrics)
-    DB->>FS: Set document(miner_states)
-    FS-->>DB: Success
-    DB-->>API: True
-    API->>Miner: HeartbeatResponse
-```
-
-## Core Components
-
-### Heartbeat Signal Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant M as Miner
-    participant S as Server
-    participant V as Validator
-    participant DB as Database
-
-    %% Initial Registration
-    M->>S: Register Miner
-    S->>DB: Store Miner Details
-    DB-->>S: Confirmation Saved
-
-    %% Regular Periodic Signaling
-    loop Periodic Signals
-        M->>S: Send Heartbeat Signal
-        S->>DB: Update Last Signal Timestamp
-        DB-->>S: Timestamp Updated
-    end
-
-    %% Signal Interruption Scenario
-    Note over M,S: No Signal Received
-    S->>S: Detect Signal Interruption
-    S->>V: Trigger Offline Investigation
-    V->>DB: Retrieve Miner Details
-    DB-->>V: Return Miner Information
-
-    %% Validation Process
-    V->>M: Attempt Direct Communication
-    alt Miner Unresponsive
-        V->>DB: Update Status to Offline
-        V->>S: Confirm Offline Status
-    else Miner Responds
-        V->>DB: Keep Status as Online
-        V->>S: Clear Offline Alert
-    end
-
-    %% Miner Recovery
-    M->>S: Restore Connection Signal
-    S->>DB: Update Signal Timestamp
-    DB-->>S: Timestamp Refreshed
-    S->>V: Send Recovery Notification
-    V->>DB: Verify Miner Status
-    DB-->>V: Status Confirmation
-```
-
-### 1. HeartbeatStore Initialization and State Management
+### Imports and Dependencies
 
 ```python
-class HeartbeatStore:
-    def __init__(self):
-        self.miner_heartbeats: Dict[str, datetime] = {}
-        self.repository = HeartbeatRepository()
-        self.offline_threshold = timedelta(seconds=45)
-        self.health_check_task = None
-        self._alert_sent: Dict[str, bool] = {}
+import asyncio
+import json
+import logging
+import os
+import platform
+import signal
+import socket
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+import aiohttp
+import psutil
+
+from src.user_manager import UserManager
+from src.utils import configure_logging
 ```
 
-**Detailed Explanation:**
+- **Standard Libraries**:
+    - `asyncio`: For asynchronous programming.
+    - `json`: To handle JSON data.
+    - `logging`: For logging events and errors.
+    - `os`, `sys`, `platform`: To interact with the operating system.
+    - `signal`: To handle termination signals.
+    - `socket`: For network-related operations.
+    - `time`, `datetime`: For time tracking and formatting.
+    - `pathlib.Path`: For filesystem path manipulations.
 
-- **Class Definition**: `HeartbeatStore` is responsible for maintaining the in-memory state of miner heartbeats and managing background health checks.
+- **Third-Party Libraries**:
+    - `aiohttp`: For making asynchronous HTTP requests.
+    - `psutil`: For retrieving system and process information.
 
-**Initialization (`__init__` method)**:
-- `self.miner_heartbeats`: A dictionary mapping each miner's unique identifier (`miner_id`) to the timestamp of their last received heartbeat. This serves as the primary in-memory state tracker.
-- `self.repository`: An instance of `HeartbeatRepository`, which handles all interactions with the Firestore database. This separation adheres to the repository pattern, promoting modularity and testability.
-- `self.offline_threshold`: A `timedelta` object set to 45 seconds. If a miner's last heartbeat exceeds this threshold, the system will consider the miner offline.
-- `self.health_check_task`: Initially set to `None`. This will hold a reference to the asynchronous background task responsible for periodic health checks.
-- `self._alert_sent`: A dictionary tracking whether an alert has already been sent for a particular miner being offline. This prevents duplicate alerts for the same offline event.
+- **Internal Modules**:
+    - `UserManager`: Manages user-related data.
+    - `configure_logging`: Sets up logging configurations.
 
-**Interactions and Responsibilities:**
-
-- The `HeartbeatStore` maintains real-time tracking of miner statuses in memory, allowing for quick access and minimal latency in status evaluations.
-- It leverages `HeartbeatRepository` to persist state changes and historical data, ensuring data durability and enabling retrospective analyses.
-- The `offline_threshold` determines the sensitivity of the system in detecting offline miners, balancing between timely alerts and avoiding false positives due to transient network issues.
-- The `health_check_task` ensures that the system continuously monitors miner statuses without blocking the main execution flow.
-- The `_alert_sent` dictionary ensures that administrators are notified only once per offline event, enhancing alert management efficiency.
-
-### 2. Health Check Implementation
+### Logging Configuration
 
 ```python
-async def periodic_health_check(self):
-    while True:
-        try:
-            current_time = datetime.now(timezone.utc)
-            offline_miners = []
-
-            for miner_id, last_heartbeat in list(self.miner_heartbeats.items()):
-                time_since_last = current_time - last_heartbeat
-                logger.debug(f"Miner {miner_id} last heartbeat: {time_since_last.total_seconds()}s ago")
-                
-                if time_since_last > self.offline_threshold:
-                    offline_miners.append(miner_id)
-                    self._alert_offline_miner(miner_id, last_heartbeat, time_since_last)
-
-            # Process offline miners
-            for miner_id in offline_miners:
-                await self.repository.record_heartbeat(
-                    miner_id=miner_id,
-                    status=MinerHeartbeatStatus.OFFLINE,
-                    metrics=None,
-                    timestamp=current_time
-                )
-
-            await asyncio.sleep(10)
+logger = logging.getLogger(__name__)
 ```
 
-**Detailed Explanation:**
+- Initializes a logger specific to this module using the module's `__name__`.
+- Logging is further configured in the `main` function to include both file and console handlers with a detailed format.
 
-- **Function Definition**: `periodic_health_check` is an asynchronous method responsible for continuously monitoring the health of all tracked miners.
+### Class: `HeartbeatService`
 
-- **Infinite Loop (`while True`)**: Ensures that the health check runs indefinitely at specified intervals.
+The `HeartbeatService` class encapsulates all functionalities related to sending heartbeats to the server.
 
-- **Try-Except Block**: Encapsulates the monitoring logic to gracefully handle any unexpected exceptions without terminating the health check loop.
-
-- **Current Time Retrieval**:
-    - `current_time`: Captures the current UTC timestamp to ensure consistency across distributed systems and avoid timezone discrepancies.
-
-- **Offline Miners List**:
-    - `offline_miners`: An initially empty list to accumulate `miner_id`s that are determined to be offline during the current iteration.
-
-- **Iterating Over Miners**:
-    - `for miner_id, last_heartbeat in list(self.miner_heartbeats.items())`: Iterates over a snapshot of the current miner heartbeats. Wrapping the items in `list()` prevents issues if the dictionary is modified during iteration.
-    - `time_since_last`: Calculates the duration since the last heartbeat by subtracting `last_heartbeat` from `current_time`.
-    - `logger.debug(...)`: Logs the time since the last heartbeat for each miner at the DEBUG level, aiding in troubleshooting and performance monitoring.
-    - **Offline Detection**:
-        - If `time_since_last` exceeds `self.offline_threshold` (45 seconds), the miner is considered offline.
-        - The `miner_id` is appended to the `offline_miners` list.
-        - The `_alert_offline_miner` method is invoked to notify administrators about the offline status, ensuring that alerts are managed appropriately.
-
-- **Processing Offline Miners**:
-    - For each `miner_id` in `offline_miners`, the system records the offline status in the database by invoking `self.repository.record_heartbeat(...)` with `status` set to `MinerHeartbeatStatus.OFFLINE` and `metrics` as `None`.
-    - This operation ensures that the offline status is persisted for future reference and analysis.
-
-- **Sleep Interval**:
-    - `await asyncio.sleep(10)`: Suspends the loop for 10 seconds before the next health check iteration. This interval balances responsiveness with resource utilization, ensuring timely detection without excessive CPU usage.
-
-**Key Technical Aspects:**
-
-- **Use of `list()` for Safe Iteration**: By converting `self.miner_heartbeats.items()` to a list, the system avoids runtime errors that could arise from modifying the dictionary while iterating over it.
-  
-- **UTC Timestamps for Consistency**: Utilizing UTC ensures that time comparisons remain accurate regardless of the server's local timezone, crucial for distributed deployments.
-
-- **Separation of Concerns**: The health check loop focuses solely on detecting offline miners, delegating the alerting and database recording responsibilities to other methods (`_alert_offline_miner` and `record_heartbeat`), enhancing code modularity.
-
-- **Optimized Sleep Interval**: A 10-second sleep interval is chosen to reduce CPU load while maintaining a high level of responsiveness in detecting miner status changes.
-
-### 3. Heartbeat Recording and Database Operations
+#### Initialization (`__init__`)
 
 ```python
-async def record_heartbeat(
-    self,
-    miner_id: str,
-    status: MinerHeartbeatStatus,
-    metrics: Optional[HeartbeatMetrics],
-    timestamp: datetime
-) -> bool:
-    try:
-        state_doc = self.miner_states.document(miner_id)
-        current_state = state_doc.get()
-
-        state_data = {
-            "miner_id": miner_id,
-            "last_heartbeat": timestamp,
-            "current_status": status.value,
-            "heartbeat_count": firestore.Increment(1),
-            "updated_at": timestamp
-        }
-
-        if metrics is not None:
-            state_data["current_metrics"] = metrics.model_dump()
-
-        state_doc.set(state_data, merge=True)
-        return True
-
-    except Exception as e:
-        logger.error(f"Error recording heartbeat: {e}", exc_info=True)
-        return False
+def __init__(self, 
+             server_url: str = "https://orchestrator-gekh.onrender.com/api/v1",
+             heartbeat_interval: int = 30):
+    """Initialize HeartbeatService with configuration"""
+    self.server_url = server_url.rstrip('/')
+    self.heartbeat_interval = heartbeat_interval
+    self.session = None
+    self.is_running = False
+    self.user_manager = UserManager()
+    self.miner_id = None
+    self.last_heartbeat = None
+    
+    logger.info("HeartbeatService initialized with:")
+    logger.info(f"  Server URL: {self.server_url}")
+    logger.info(f"  Heartbeat interval: {self.heartbeat_interval} seconds")
 ```
-
-**Detailed Explanation:**
-
-- **Function Definition**: `record_heartbeat` is an asynchronous method within the `HeartbeatRepository` class that records a miner's heartbeat status and associated metrics into Firestore.
 
 - **Parameters**:
-    - `miner_id`: The unique identifier of the miner.
-    - `status`: The current status of the miner, represented by the `MinerHeartbeatStatus` enum (`ONLINE`, `OFFLINE`, `DEGRADED`).
-    - `metrics`: An optional `HeartbeatMetrics` object containing detailed system metrics. It's `None` when the miner is offline.
-    - `timestamp`: The exact time when the heartbeat was received.
+    - `server_url`: The base URL of the orchestrator server to which heartbeats are sent.
+    - `heartbeat_interval`: Time interval (in seconds) between consecutive heartbeats.
 
-- **Try-Except Block**: Ensures that any exceptions during the database operation are caught and logged, preventing system crashes and aiding in debugging.
+- **Attributes**:
+    - `self.session`: An `aiohttp` session for making HTTP requests.
+    - `self.is_running`: A flag indicating whether the service is active.
+    - `self.user_manager`: An instance of `UserManager` to access user data.
+    - `self.miner_id`: The unique identifier for the miner, retrieved from user data.
+    - `self.last_heartbeat`: Timestamp of the last successful heartbeat.
 
-- **Firestore Document Retrieval**:
-    - `state_doc = self.miner_states.document(miner_id)`: Accesses the Firestore document corresponding to the `miner_id` within the `miner_states` collection.
-    - `current_state = state_doc.get()`: Retrieves the current state of the miner from Firestore.
+- **Logging**:
+    - Logs initialization parameters for traceability.
 
-- **State Data Preparation**:
-    - Creates a dictionary containing the updated state information including:
-        - Miner ID
-        - Last heartbeat timestamp
-        - Current status
-        - Heartbeat count (incremented atomically)
-        - Update timestamp
-        - Optional metrics data
-
-- **Database Update**:
-    - `state_doc.set(state_data, merge=True)`: Updates the Firestore document, preserving existing fields not included in the update.
-
-**Technical Implementation:**
-
-- **Atomic Operations**: Uses `firestore.Increment(1)` for atomic counter updates
-- **Conditional Logic**: Only includes metrics when available
-- **Error Handling**: Logs exceptions with full context
-- **Merge Operations**: Preserves existing document data during updates
-
-### 4. Status Change Recording
+#### `_get_miner_id` Method
 
 ```python
-async def record_status_change(
-    self,
-    miner_id: str,
-    old_status: str,
-    new_status: str,
-    reason: str
-) -> bool:
+def _get_miner_id(self) -> str:
+    """Get miner ID from config file"""
     try:
-        doc = self.status_history.document()
-        status_data = {
-            "miner_id": miner_id,
-            "timestamp": datetime.utcnow(),
-            "old_status": old_status,
-            "new_status": new_status,
-            "reason": reason
-        }
-        doc.set(status_data)
-        return True
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'user_info.json')
+        logger.debug(f"Looking for config file at: {config_path}")
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                miner_id = config.get('miner_id')
+                if miner_id:
+                    logger.info(f"Loaded miner_id from config: {miner_id}")
+                    return miner_id
+                else:
+                    logger.error("No miner_id found in config file")
+        else:
+            logger.error(f"Config file not found at {config_path}")
     except Exception as e:
-        logger.error(f"Error recording status change: {e}", exc_info=True)
-        return False
+        logger.error(f"Error reading miner_id from config: {str(e)}", exc_info=True)
+    return None
 ```
 
-**Key Features:**
+- **Purpose**: Retrieves the `miner_id` from the `user_info.json` configuration file.
+- **Process**:
+    1. Constructs the path to `user_info.json` located two directories up from the current file.
+    2. Checks if the file exists:
+        - If it exists, loads the JSON content and extracts `miner_id`.
+        - Logs an error if `miner_id` is missing.
+    3. Logs an error if the config file doesn't exist.
+    4. Catches and logs any exceptions that occur during the process.
+- **Returns**: The `miner_id` as a string if found; otherwise, `None`.
 
-- Records status transitions with timestamps
-- Maintains audit trail of status changes
-- Includes reasoning for status transitions
-- Uses auto-generated document IDs for chronological ordering
-- Implements error handling with logging
-
-### 5. Historical Data Cleanup
+#### `_get_system_metrics` Method
 
 ```python
-async def cleanup_old_heartbeats(self, days_old: int = 30) -> bool:
+def _get_system_metrics(self):
+    """Get current system metrics"""
     try:
-        cleanup_threshold = datetime.utcnow() - timedelta(days=days_old)
+        logger.debug("Collecting system metrics...")
         
-        metrics_query = self.metrics_history.where(
-            filter=FieldFilter("timestamp", "<", cleanup_threshold)
-        ).stream()
-
-        batch_size = 0
-        batch = self.db.batch()
-
-        for doc in metrics_query:
-            batch.delete(doc.reference)
-            batch_size += 1
-
-            if batch_size >= 500:  # Firestore batch limit
-                batch.commit()
-                batch = self.db.batch()
-                batch_size = 0
-
-        if batch_size > 0:
-            batch.commit()
-
-        return True
-
-    except Exception as e:
-        logger.error(f"Error cleaning up data: {e}", exc_info=True)
-        return False
-```
-
-**Implementation Details:**
-
-- **Parameters**: 
-    - `days_old`: Retention period in days (default: 30)
-
-- **Core Operations**:
-    - Calculates cleanup threshold date
-    - Queries metrics older than threshold
-    - Deletes records in batches of 500 (Firestore limit)
-    - Handles remaining records in final batch
-
-- **Error Handling**:
-    - Logs exceptions with stack traces
-    - Returns boolean success indicator
-
-### 6. Heartbeat API Endpoint Handler
-
-```python
-@router.post("/heart_beat", response_model=HeartbeatResponse)
-async def receive_heartbeat(
-    heartbeat: HeartbeatRequest,
-    background_tasks: BackgroundTasks,
-    miner_service: MinerService = Depends(get_miner_service),
-) -> HeartbeatResponse:
-    try:
-        miner_id = heartbeat.metrics.miner_id
-        timestamp = datetime.now(timezone.utc)
+        # CPU metrics
+        cpu_usage = psutil.cpu_percent(interval=1)
+        logger.debug(f"CPU Usage: {cpu_usage}%")
         
-        logger.debug(f"Received heartbeat from miner {miner_id}")
+        # Memory metrics
+        memory = psutil.virtual_memory()
+        memory_usage = memory.percent
+        logger.debug(f"Memory Usage: {memory_usage}%")
         
-        miner = await miner_service.get_miner(miner_id)
-        if not miner:
-            logger.warning(f"Miner {miner_id} not found")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Miner {miner_id} not found"
-            )
-
-        await heartbeat_store.record_heartbeat(miner_id, timestamp)
+        # Disk metrics
+        disk = psutil.disk_usage('/')
+        disk_usage = disk.percent
+        logger.debug(f"Disk Usage: {disk_usage}%")
         
-        success = await heartbeat_store.repository.record_heartbeat(
-            miner_id=miner_id,
-            status=heartbeat.status,
-            metrics=heartbeat.metrics,
-            timestamp=timestamp
-        )
+        # System info
+        boot_time_timestamp = psutil.boot_time()
+        boot_time = datetime.fromtimestamp(boot_time_timestamp).isoformat()
+        uptime = time.time() - boot_time_timestamp
+        logger.debug(f"System Uptime: {uptime:.2f} seconds")
 
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to record heartbeat"
-            )
-
-        return HeartbeatResponse(
-            status="success",
-            message="Heartbeat processed successfully",
-            last_seen=timestamp,
-            commands=[]
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error processing heartbeat: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-```
-
-**Key Features:**
-
-- **Endpoint Configuration**: 
-    - POST route with response model validation
-    - Dependency injection for services
-    - Background task support
-
-- **Processing Flow**:
-    1. Extracts miner ID and timestamps request
-    2. Verifies miner existence
-    3. Records heartbeat in memory store
-    4. Persists data to database
-    5. Returns success response
-
-- **Error Handling**:
-    - 404 for unknown miners
-    - 500 for processing failures
-    - Detailed error logging
-
-### 7. Critical Data Structures
-
-```python
-class HeartbeatMetrics(BaseModel):
-    miner_id: str = Field(..., description="Unique identifier of the miner")
-    system_info: SystemInfo = Field(..., description="Static system information")
-    metrics: SystemMetrics = Field(..., description="Current system metrics")
-    resource_usage: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Resource-specific usage details"
-    )
-    active_jobs: Optional[List[str]] = Field(
-        default_factory=list,
-        description="List of currently running job IDs"
-    )
-```
-
-**Fields Description:**
-
-- `miner_id`: Unique identifier for the miner
-- `system_info`: Static system data (hostname, IP, OS version)
-- `metrics`: Dynamic system performance metrics
-- `resource_usage`: Extensible resource-specific details
-- `active_jobs`: Currently running job identifiers
-
-## Component Interactions
-
-1. **API Layer → HeartbeatStore**:
-    - Processes incoming heartbeats
-    - Updates in-memory cache
-    - Persists data to Firestore
-
-2. **HeartbeatStore → HeartbeatRepository**:
-    - Maintains real-time miner states
-    - Triggers periodic health checks
-    - Manages state persistence
-
-3. **HeartbeatRepository → Firestore**:
-    - Handles database operations
-    - Manages data persistence
-    - Maintains historical records
-
-## Error Handling and Logging
-
-### Error Flow
-
-```mermaid
-graph LR
-    E[Exception] -->|Catch| L[Log Error]
-    L -->|Evaluate| D{Severity}
-    D -->|Critical| S[Stop Process]
-    D -->|Non-Critical| R[Return False]
-    D -->|Recoverable| C[Continue]
-```
-
-## Database Schema
-
-```mermaid
-erDiagram
-    miner_states ||--o{ status_history : "records_changes"
-    miner_states ||--o{ metrics_history : "stores_metrics"
-
-    miner_states {
-        string miner_id PK
-        datetime last_heartbeat
-        string current_status
-        json current_metrics
-        int heartbeat_count
-        datetime updated_at
-    }
-
-    status_history {
-        string miner_id FK
-        datetime timestamp
-        string old_status 
-        string new_status
-        string reason
-    }
-
-    metrics_history {
-        string miner_id FK
-        datetime timestamp
-        string status
-        json metrics
-        float time_since_last
-    }
-```
-
-### Error Handling Strategies
-
-1. **Try-Except Blocks**:
-    ```python
-    try:
-        state_doc.set(state_data, merge=True)
-        return True
-    except Exception as e:
-        logger.error(f"Error recording heartbeat: {e}", exc_info=True)
-        return False
-    ```
-
-2. **HTTP Responses**:
-    ```python
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Miner {miner_id} not found"
-    )
-    ```
-
-### Logging Levels
-
-```python
-logger.debug(f"Miner {miner_id} last heartbeat: {time_since_last.total_seconds()}s ago")
-logger.error(f"Error recording heartbeat: {e}", exc_info=True)
-logger.warning(f"Miner {miner_id} not found")
-```
-
-- **DEBUG**: Detailed diagnostic information
-- **INFO**: General operational messages
-- **WARNING**: Potential issues
-- **ERROR**: Serious problems
-
-## Concurrency and Asynchronous Operations
-
-### Background Tasks
-
-```python
-async def periodic_health_check(self):
-    while True:
-        try:
-            current_time = datetime.now(timezone.utc)
-            offline_miners = []
-            
-            for miner_id, last_heartbeat in list(self.miner_heartbeats.items()):
-                time_since_last = current_time - last_heartbeat
-                if time_since_last > self.offline_threshold:
-                    offline_miners.append(miner_id)
-            
-            await asyncio.sleep(10)
-        except Exception as e:
-            logger.error(f"Health check error: {e}", exc_info=True)
-```
-
-### Task Management
-
-```python
-@app.on_event("startup")
-async def on_startup():
-    await heartbeat_store.start()
-
-@app.on_event("shutdown") 
-async def on_shutdown():
-    await heartbeat_store.stop()
-```
-
-**Key Features:**
-
-- Asynchronous endpoint handlers
-- Non-blocking I/O operations
-- Background health checks
-- Graceful startup/shutdown
-- Task cancellation handling
-
-## Data Models
-
-### MinerHeartbeatStatus
-
-```python
-class MinerHeartbeatStatus(str, Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
-    DEGRADED = "degraded"
-```
-
-### SystemMetrics
-
-```python
-class SystemMetrics(BaseModel):
-    cpu_usage: float = Field(..., description="CPU usage percentage")
-    memory_usage: float = Field(..., description="Memory usage percentage")
-    disk_usage: float = Field(..., description="Disk usage percentage")
-    network_latency: float = Field(..., description="Network latency in ms")
-    gpu_usage: Optional[float] = Field(None, description="GPU usage percentage if available")
-    temperature: Optional[float] = Field(None, description="System temperature in Celsius")
-    active_processes: Optional[int] = Field(None, description="Number of active processes")
-```
-
-### HeartbeatRequest
-
-```python
-class HeartbeatRequest(BaseModel):
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    status: MinerHeartbeatStatus
-    metrics: HeartbeatMetrics
-    version: str
-```
-
-### HeartbeatResponse 
-
-```python
-class HeartbeatResponse(BaseModel):
-    status: str
-    message: str
-    last_seen: datetime
-    commands: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
-```
-
-## Database Operations
-
-### Firestore Collections
-
-1. **miner_states**: Current miner status
-2. **status_history**: Status change logs
-3. **metrics_history**: Historical metrics
-
-### Query Operations
-
-```python
-metrics_query = (
-    self.metrics_history
-    .where(filter=FieldFilter("timestamp", ">=", time_threshold))
-    .order_by("timestamp", direction=firestore.Query.DESCENDING)
-    .limit(limit)
-)
-```
-
-### Batch Operations
-
-```python
-batch = self.db.batch()
-for doc in metrics_query:
-    batch.delete(doc.reference)
-    batch_size += 1
-    if batch_size >= 500:
-        batch.commit()
-        batch = self.db.batch()
-        batch_size = 0
-```
-
-## API Endpoints
-
-### `/heart_beat` (POST)
-
-**Request Body**: `HeartbeatRequest`
-**Response**: `HeartbeatResponse`
-
-```python
-@router.post("/heart_beat", response_model=HeartbeatResponse)
-async def receive_heartbeat(
-    heartbeat: HeartbeatRequest,
-    background_tasks: BackgroundTasks,
-    miner_service: MinerService = Depends(get_miner_service),
-) -> HeartbeatResponse:
-    """Handle incoming heartbeat requests"""
-    try:
-        miner_id = heartbeat.metrics.miner_id
-        timestamp = datetime.now(timezone.utc)
+        # Network interfaces
+        net_info = psutil.net_if_addrs()
+        ip_address = "0.0.0.0"
         
-        miner = await miner_service.get_miner(miner_id)
-        if not miner:
-            raise HTTPException(status_code=404, detail=f"Miner {miner_id} not found")
+        logger.debug("Scanning network interfaces...")
+        for interface, addresses in net_info.items():
+            logger.debug(f"Checking interface: {interface}")
+            for addr in addresses:
+                if hasattr(addr, 'family') and addr.family == socket.AF_INET and not interface.startswith(('lo', 'docker', 'veth')):
+                    ip_address = addr.address
+                    logger.debug(f"Found usable IP address: {ip_address} on interface {interface}")
+                    break
 
-        await heartbeat_store.record_heartbeat(miner_id, timestamp)
-        
-        success = await heartbeat_store.repository.record_heartbeat(
-            miner_id=miner_id,
-            status=heartbeat.status,
-            metrics=heartbeat.metrics,
-            timestamp=timestamp
-        )
-
-        return HeartbeatResponse(
-            status="success",
-            message="Heartbeat processed successfully",
-            last_seen=timestamp,
-            commands=[]
-        )
-```
-
-### `/miners/heartbeat_status` (GET)
-
-Returns current status of all miners:
-
-```python
-@router.get("/miners/heartbeat_status")
-async def get_heartbeat_status() -> Dict[str, Dict]:
-    current_time = datetime.now(timezone.utc)
-    status_report = {}
-
-    for miner_id, last_seen in heartbeat_store.miner_heartbeats.items():
-        time_since = current_time - last_seen
-        status = (
-            MinerHeartbeatStatus.OFFLINE.value 
-            if time_since > heartbeat_store.offline_threshold 
-            else MinerHeartbeatStatus.ONLINE.value
-        )
-
-        status_report[miner_id] = {
-            "last_seen": last_seen.isoformat(),
-            "time_since": str(time_since),
-            "status": status
+        metrics = {
+            "cpu_usage": cpu_usage,
+            "memory_usage": memory_usage,
+            "disk_usage": disk_usage,
+            "network_latency": 0,
+            "temperature": None
         }
 
-    return status_report
-```
+        system_info = {
+            "hostname": platform.node(),
+            "ip_address": ip_address,
+            "os_version": f"{platform.system()} {platform.release()}",
+            "uptime": uptime,
+            "last_boot": boot_time
+        }
 
-## Application Lifecycle
+        logger.debug("System metrics collected successfully")
+        logger.debug(f"System Info: {json.dumps(system_info, indent=2)}")
+        logger.debug(f"Metrics: {json.dumps(metrics, indent=2)}")
 
-### Startup
-
-```python
-@app.on_event("startup")
-async def on_startup():
-    try:
-        logger.info("Starting services...")
-        await heartbeat_store.start()
-        logger.info("Services started successfully")
+        return metrics, system_info
+        
     except Exception as e:
-        logger.error(f"Error during startup: {e}", exc_info=True)
-        raise
+        logger.error(f"Error getting system metrics: {str(e)}", exc_info=True)
+        return {}, {}
 ```
 
-### Shutdown
+- **Purpose**: Gathers real-time system metrics to include in the heartbeat data.
+- **Metrics Collected**:
+    - **CPU Usage**: Percentage of CPU utilization over 1 second.
+    - **Memory Usage**: Percentage of used virtual memory.
+    - **Disk Usage**: Percentage of used disk space on the root partition.
+    - **Network Latency**: Placeholder (`0`) as actual latency measurement is not implemented.
+    - **Temperature**: Placeholder (`None`) as temperature measurement is not implemented.
+    
+- **System Information**:
+    - **Hostname**: The network name of the machine.
+    - **IP Address**: The first non-loopback IPv4 address found.
+    - **OS Version**: The operating system and its version.
+    - **Uptime**: Time since the last system boot in seconds.
+    - **Last Boot**: Timestamp of the last system boot in ISO format.
+
+- **Process**:
+    1. Uses `psutil` to retrieve CPU, memory, and disk usage.
+    2. Calculates system uptime and boot time.
+    3. Iterates over network interfaces to find a usable IPv4 address, excluding loopback and virtual interfaces.
+    4. Logs detailed debug information for each metric collected.
+    5. Returns a tuple containing `metrics` and `system_info`.
+
+- **Error Handling**:
+    - Catches and logs any exceptions that occur during metric collection.
+    - Returns empty dictionaries if an error is encountered.
+
+#### `initialize` Method
 
 ```python
-@app.on_event("shutdown")
-async def on_shutdown():
+async def initialize(self) -> bool:
+    """Initialize the heartbeat service"""
     try:
-        logger.info("Shutting down services...")
-        await heartbeat_store.stop()
-        logger.info("Services shut down successfully")
+        logger.info("Starting heartbeat service initialization")
+        
+        # Get miner ID
+        self.miner_id = self._get_miner_id()
+        if not self.miner_id:
+            logger.error("No miner_id available. Please configure miner_id in config.json")
+            return False
+        
+        # Initialize HTTP session
+        logger.info("Creating aiohttp ClientSession with 10s timeout")
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10)
+        )
+        
+        logger.info("Heartbeat service initialization completed successfully")
+        return True
+
     except Exception as e:
-        logger.error(f"Error during shutdown: {e}", exc_info=True)
-        raise
+        logger.error(f"Failed to initialize heartbeat service: {str(e)}", exc_info=True)
+        return False
 ```
 
-### Running the Application
+- **Purpose**: Prepares the `HeartbeatService` for operation by:
+    1. Retrieving the `miner_id`.
+    2. Establishing an asynchronous HTTP session with a timeout.
+    
+- **Process**:
+    1. Logs the start of initialization.
+    2. Calls `_get_miner_id` to fetch the miner's unique identifier.
+    3. Validates the presence of `miner_id`; logs an error and aborts if missing.
+    4. Creates an `aiohttp` session with a 10-second total timeout for requests.
+    5. Logs successful initialization and returns `True`.
+    
+- **Error Handling**:
+    - Catches and logs any exceptions during initialization.
+    - Returns `False` if initialization fails.
+
+#### `send_heartbeat` Method
 
 ```python
-if __name__ == "__main__":
-    import uvicorn
-    logger.info("Starting Polaris Compute Subnet server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
+async def send_heartbeat(self) -> bool:
+    """Send a heartbeat signal to the server"""
+    if not self.session:
+        logger.error("Cannot send heartbeat: session not initialized")
+        return False
 
-### Log Management 
-
-```python
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s.%(msecs)03d %(levelname)s [%(name)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler('heartbeat.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-```
-
-This logging configuration provides:
-- Millisecond-precision timestamps
-- Log level differentiation
-- Service component identification
-- Dual output to file and console
-- Machine-parseable format for automated analysis
-
-### Process Management
-
-```python
-def stop_process(pid, process_name, force=False):
     try:
-        process = psutil.Process(pid)
-        if force:
-            if platform.system() == 'Windows':
-                subprocess.run(['taskkill', '/F', '/PID', str(pid)], check=True)
+        logger.debug("Preparing heartbeat data...")
+        metrics, system_info = self._get_system_metrics()
+        current_time = datetime.utcnow()
+        
+        heartbeat_data = {
+            "timestamp": current_time.isoformat(),
+            "status": "online",  # Changed from "ONLINE" to "online"
+            "version": "1.0.0",
+            "metrics": {
+                "miner_id": self.miner_id,
+                "system_info": system_info,
+                "metrics": metrics,
+                "resource_usage": {},
+                "active_jobs": []
+            }
+        }
+        
+        endpoint = f"{self.server_url}/heart_beat"
+        logger.info(f"Sending heartbeat to: {endpoint}")
+        logger.debug(f"Request payload: {json.dumps(heartbeat_data, indent=2)}")
+
+        start_time = time.time()
+        logger.debug("Making POST request...")
+        
+        async with self.session.post(
+            endpoint,
+            json=heartbeat_data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": f"PolarisHeartbeat/{platform.python_version()}"
+            }
+        ) as response:
+            response_time = time.time() - start_time
+            logger.info(f"Response received in {response_time:.3f} seconds with status {response.status}")
+            
+            response_body = await response.text()
+            logger.debug(f"Response headers: {dict(response.headers)}")
+            logger.debug(f"Response body: {response_body}")
+            
+            if response.status == 200:
+                self.last_heartbeat = time.time()
+                logger.info("Heartbeat sent successfully")
+                return True
+            elif response.status == 422:
+                logger.error(f"Data validation error. Response: {response_body}")
+                return False
             else:
-                os.kill(pid, signal.SIGKILL)
-            return True
-        
-        process.terminate()
-        process.wait(timeout=10)
-        return True
-            
-    except psutil.TimeoutExpired:
+                logger.warning(f"Heartbeat failed with status {response.status}. Response: {response_body}")
+                return False
+
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error sending heartbeat: {str(e)}", exc_info=True)
         return False
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return True
+    except Exception as e:
+        logger.error(f"Unexpected error sending heartbeat: {str(e)}", exc_info=True)
+        return False
 ```
 
-This process management function implements:
-1. Process termination with configurable force level
-2. Platform-specific handling for Windows and Unix
-3. Graceful shutdown with timeout
-4. Error handling for common process management scenarios
-5. Privilege elevation when required
+- **Purpose**: Constructs and sends a heartbeat JSON payload to the orchestrator server, handling responses appropriately.
+
+- **Process**:
+    1. Validates that the HTTP session (`self.session`) is initialized.
+    2. Collects system metrics and system information using `_get_system_metrics`.
+    3. Constructs the `heartbeat_data` dictionary with:
+        - `timestamp`: Current UTC time in ISO format.
+        - `status`: `"online"`.
+        - `version`: Hardcoded as `"1.0.0"`.
+        - `metrics`: Nested dictionary containing miner ID, system info, collected metrics, and placeholders for `resource_usage` and `active_jobs`.
+    4. Defines the endpoint URL by appending `/heart_beat` to `server_url`.
+    5. Logs the endpoint and the payload for debugging.
+    6. Sends an asynchronous POST request with the heartbeat data and appropriate headers.
+    7. Measures and logs the response time and status.
+    8. Processes the response:
+        - **200 OK**: Marks the heartbeat as successful.
+        - **422 Unprocessable Entity**: Logs a data validation error.
+        - **Other Status Codes**: Logs a warning with the response body.
+    9. Catches and logs any network-related or unexpected errors.
+
+- **Returns**: `True` if the heartbeat was sent successfully (`200 OK`); otherwise, `False`.
+
+#### `run` Method
+
+```python
+async def run(self):
+    """Main service loop"""
+    if not await self.initialize():
+        logger.error("Failed to initialize heartbeat service, exiting")
+        return
+
+    self.is_running = True
+    logger.info(f"Heartbeat service started with interval of {self.heartbeat_interval} seconds")
+
+    retry_interval = self.heartbeat_interval
+    cycle_count = 0
+    
+    while self.is_running:
+        try:
+            cycle_count += 1
+            logger.info(f"Starting heartbeat cycle #{cycle_count}")
+            
+            success = await self.send_heartbeat()
+            
+            if success:
+                logger.info(f"Heartbeat cycle #{cycle_count} completed successfully")
+                retry_interval = self.heartbeat_interval
+            else:
+                logger.warning(f"Heartbeat cycle #{cycle_count} failed")
+                retry_interval = min(retry_interval * 2, 300)
+                logger.info(f"Increasing retry interval to {retry_interval} seconds")
+            
+            logger.debug(f"Sleeping for {retry_interval} seconds until next cycle")
+            await asyncio.sleep(retry_interval)
+            
+        except Exception as e:
+            logger.error(f"Error in heartbeat cycle #{cycle_count}: {str(e)}", exc_info=True)
+            await asyncio.sleep(retry_interval)
+```
+
+- **Purpose**: Manages the continuous operation of the heartbeat service, handling periodic heartbeats and implementing retry logic on failures.
+
+- **Process**:
+    1. Calls `initialize` to set up the service; exits if initialization fails.
+    2. Sets `self.is_running` to `True` to enter the main loop.
+    3. Initializes `retry_interval` to the configured `heartbeat_interval`.
+    4. Enters a `while` loop that continues as long as `self.is_running` is `True`.
+    5. For each cycle:
+        - Increments the `cycle_count`.
+        - Logs the start of the heartbeat cycle.
+        - Attempts to send a heartbeat via `send_heartbeat`.
+        - Based on the success of the heartbeat:
+            - **Success**:
+                - Logs successful completion.
+                - Resets `retry_interval` to the standard interval.
+            - **Failure**:
+                - Logs the failure.
+                - Doubles the `retry_interval`, capping it at 300 seconds (5 minutes).
+                - Logs the updated retry interval.
+        - Sleeps for `retry_interval` seconds before the next cycle.
+    6. Catches and logs any exceptions within the loop, ensuring the service continues running by sleeping before the next attempt.
+
+- **Retry Logic**:
+    - On failure, the interval between heartbeats increases exponentially (doubling each time) up to a maximum of 5 minutes. This prevents overwhelming the server or network during prolonged outages.
+
+#### `stop` Method
+
+```python
+async def stop(self):
+    """Stop the heartbeat service"""
+    logger.info("Stopping heartbeat service...")
+    self.is_running = False
+    
+    if self.session:
+        logger.debug("Closing aiohttp session")
+        await self.session.close()
+        
+    logger.info("Heartbeat service stopped successfully")
+```
+
+- **Purpose**: Gracefully terminates the heartbeat service by:
+    1. Setting `self.is_running` to `False` to exit the main loop.
+    2. Closing the `aiohttp` session to free up resources.
+    3. Logging the termination.
+
+---
+
+### Function: `main`
+
+```python
+async def main():
+    """Main entry point for the heartbeat service"""
+    try:
+        # Configure logging with more detailed format
+        logging.basicConfig(
+            level=logging.DEBUG,  # Set to DEBUG for maximum verbosity
+            format='%(asctime)s.%(msecs)03d %(levelname)s [%(name)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+                logging.FileHandler('heartbeat.log'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+
+        logger.info("=" * 60)
+        logger.info("Starting Polaris Heartbeat Service")
+        logger.info(f"Python Version: {platform.python_version()}")
+        logger.info(f"Platform: {platform.platform()}")
+        logger.info(f"Working Directory: {os.getcwd()}")
+        logger.info("=" * 60)
+
+        service = HeartbeatService()
+
+        def signal_handler(sig, frame):
+            sig_name = signal.Signals(sig).name
+            logger.info(f"Received signal {sig_name} ({sig})")
+            asyncio.create_task(service.stop())
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        await service.run()
+        
+    except Exception as e:
+        logger.critical(f"Fatal error in heartbeat service: {str(e)}", exc_info=True)
+        sys.exit(1)
+    finally:
+        await service.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+- **Purpose**: Serves as the entry point for the heartbeat service when the script is executed directly.
+
+- **Process**:
+    1. **Logging Configuration**:
+        - Sets the logging level to `DEBUG` for comprehensive logging.
+        - Defines the log format to include timestamps with milliseconds, log levels, module names, and messages.
+        - Configures two handlers:
+            - `FileHandler`: Writes logs to `heartbeat.log`.
+            - `StreamHandler`: Outputs logs to `stdout` (console).
+    2. **Startup Logs**:
+        - Logs a separator line.
+        - Logs the start of the Polaris Heartbeat Service.
+        - Logs Python version, platform details, and the current working directory.
+        - Logs another separator line.
+    3. **Service Initialization**:
+        - Instantiates the `HeartbeatService`.
+    4. **Signal Handling**:
+        - Defines `signal_handler` to gracefully stop the service upon receiving termination signals (`SIGINT`, `SIGTERM`).
+        - Registers the signal handler for `SIGINT` and `SIGTERM`.
+    5. **Service Execution**:
+        - Calls `service.run()` to start the main loop.
+    6. **Exception Handling**:
+        - Catches and logs any fatal errors, then exits the program.
+    7. **Cleanup**:
+        - Ensures that `service.stop()` is called in the `finally` block to terminate the service gracefully, regardless of how the program exits.
+
+- **Execution**:
+    - The `main` function is run within an asyncio event loop using `asyncio.run(main())` when the script is executed directly.
+
+---
+
+## Workflow
+
+1. **Initialization**:
+    - The service starts and initializes logging.
+    - It creates an instance of `HeartbeatService` with default configurations.
+    - Retrieves the `miner_id` from the configuration file.
+    - Establishes an asynchronous HTTP session for communication with the server.
+
+2. **Heartbeat Cycle**:
+    - Enters a loop that runs as long as `self.is_running` is `True`.
+    - In each cycle:
+        - Collects current system metrics (CPU, memory, disk usage, etc.).
+        - Constructs a heartbeat payload with these metrics and system information.
+        - Sends the heartbeat to the orchestrator server via an HTTP POST request.
+        - Logs the response status and adjusts the retry interval based on success or failure.
+        - Sleeps for the specified interval before the next cycle.
+
+3. **Error Handling and Retries**:
+    - On successful heartbeat, the interval resets to the default.
+    - On failure, the interval doubles (exponentially backoff) up to a maximum of 5 minutes.
+    - Ensures resilience against temporary network issues or server downtimes.
+
+4. **Termination**:
+    - Upon receiving termination signals (`SIGINT`, `SIGTERM`), the service gracefully stops by closing the HTTP session and exiting the loop.
+
+---
+
+## Error Handling
+
+- **Configuration Errors**:
+    - Missing or invalid `miner_id` leads to service termination.
+    - Absence of `user_info.json` or missing `miner_id` is logged as an error.
+
+- **Network Errors**:
+    - `aiohttp.ClientError` is caught and logged.
+    - Unexpected exceptions during heartbeat sending are caught and logged to prevent crashes.
+
+- **System Metrics Collection Errors**:
+    - Any issues during metric collection are logged, and empty dictionaries are returned to avoid sending incomplete data.
+
+- **Service Initialization Errors**:
+    - Failures during initialization halt the service with appropriate logging.
+
+---
+
+## Integration with Other Modules
+
+- **`UserManager`**:
+    - Accesses user-specific data, particularly the `miner_id` required for heartbeat identification.
+  
+- **`configure_logging`**:
+    - Provides a centralized logging configuration that can be reused across different modules.
+
+- **`src/user_manager` and `src/utils`**:
+    - Ensure that user data is managed securely and that utility functions support common tasks like logging and configuration handling.
+
+---
