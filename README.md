@@ -105,11 +105,36 @@ Logs: stdout -> logs/polaris_stdout.log, stderr -> logs/polaris_stderr.log
 
 ### **Register a New Miner**
 
-Register a miner to manage compute resources:
+Register a miner to manage compute resources. The registration process includes several key steps and network options:
 
 ```bash
 polaris register
 ```
+
+**Registration Process:**
+
+1. **System Information Check**
+   - Automatically loads and validates your system's compute resources
+   - Displays detailed information including:
+     - Location
+     - Resource IDs
+     - RAM configurations
+     - Storage details (type, capacity, read/write speeds)
+     - CPU specifications
+     - Network configuration
+
+2. **Network Selection**
+   You can choose between different network types:
+   - **Bittensor Network**: For distributed AI training
+   - **Commune Network**: For decentralized compute resources
+   - **Standard Registration**: Default compute network
+
+3. **Registration Options**
+   - **Username**: Set your desired username for the network
+   - **Network-Specific Settings**:
+     - For Bittensor: Additional blockchain configurations
+     - For Commune: Wallet name and UID setup
+   - **SSH Configuration**: Automatic setup of secure connections
 
 **Example Interaction:**
 
@@ -119,15 +144,43 @@ System Information
 location: Nairobi, Kenya
 compute_resources[0].id: 123e4567-e89b-12d3-a456-426614174000
 compute_resources[0].ram: 32GB
-...
+compute_resources[0].storage.type: SSD
+compute_resources[0].storage.capacity: 1TB
+compute_resources[0].cpu_specs.cpu_name: Intel Xeon
+compute_resources[0].network.internal_ip: 192.168.1.100
+
 Do you want to proceed with this registration? [y/n]: y
+
+Select Network Type:
+1. Bittensor Network
+2. Commune Network
+3. Standard Registration
+Enter choice [1-3]: 2
+
+Enter your desired username: user123
+
+Commune Network Setup:
+- Creating wallet...
+- Generating UID...
+- Configuring network settings...
 
 Registration Complete
 ---------------------
 Miner ID: MXN12345abcdef67890
 Added Resources: CPU, GPU
+Network: Commune
+Wallet Name: commune_wallet_123
+Commune UID: CID_987654321
+
 Important: Save your Miner ID - you'll need it to manage your compute resources.
 ```
+
+**Validation Checks:**
+- Validates system information format
+- Verifies compute resource specifications
+- Confirms network connectivity
+- Ensures SSH configuration is correct
+- Validates RAM format and storage configurations
 
 ---
 
@@ -243,6 +296,81 @@ polaris check-main
 Main process is running with PID 11234.
 Logs: logs/main_stdout.log, logs/main_stderr.log
 ```
+
+---
+
+## Technical Documentation
+
+### System Architecture Overview
+
+```mermaid
+flowchart TB
+    M[Miner] -->|HeartbeatRequest| API[FastAPI Endpoints]
+    API -->|record_heartbeat| HS[HeartbeatStore]
+    API -->|verify_miner| MS[MinerService]
+    HS -->|Cache| MC[miner_heartbeats Dict]
+    HS -->|Store| HR[HeartbeatRepository]
+    HS -->|Monitor| HC[Health Check Task]
+    HR -->|Write| FS[(Firestore)]
+    subgraph "Firestore Collections"
+        MS1[miner_states]
+        MS2[status_history]
+        MS3[metrics_history]
+    end
+    FS --> MS1
+    FS --> MS2
+    FS --> MS3
+```
+
+### Core Components
+
+#### HeartbeatStore
+Manages in-memory state tracking of miner heartbeats and orchestrates periodic health checks:
+
+```python
+class HeartbeatStore:
+    def __init__(self):
+        self.miner_heartbeats: Dict[str, datetime] = {}
+        self.repository = HeartbeatRepository()
+        self.offline_threshold = timedelta(seconds=45)
+        self.health_check_task = None
+        self._alert_sent: Dict[str, bool] = {}
+```
+
+#### Database Schema
+
+```mermaid
+erDiagram
+    miner_states ||--o{ status_history : "records_changes"
+    miner_states ||--o{ metrics_history : "stores_metrics"
+
+    miner_states {
+        string miner_id PK
+        datetime last_heartbeat
+        string current_status
+        json current_metrics
+        int heartbeat_count
+        datetime updated_at
+    }
+
+    status_history {
+        string miner_id FK
+        datetime timestamp
+        string old_status 
+        string new_status
+        string reason
+    }
+
+    metrics_history {
+        string miner_id FK
+        datetime timestamp
+        string status
+        json metrics
+        float time_since_last
+    }
+```
+
+For complete technical documentation, including API endpoints, data models, error handling, and more, please refer to the [Technical Documentation](./docs/technical.md).
 
 ---
 

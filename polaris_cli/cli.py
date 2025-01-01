@@ -2,6 +2,8 @@
 
 import click
 
+from .heartbeat_monitor import \
+    monitor_heartbeat  # Add the heartbeat monitor import
 from .log_monitor import check_main
 from .register import register_miner
 from .repo_manager import update_repository
@@ -38,6 +40,11 @@ def stop():
 def status():
     """Check if Polaris and Compute Subnet are running."""
     check_status()
+
+@cli.command(name='monitor')
+def monitor():
+    """Monitor miner heartbeat signals in real-time."""
+    monitor_heartbeat()
 
 @cli.group(name='update')
 def update():
