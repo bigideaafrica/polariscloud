@@ -1,5 +1,3 @@
-# polaris_cli/register.py
-
 import ast
 import copy
 import json
@@ -26,9 +24,7 @@ logger = configure_logging()
 console = Console()
 
 def load_system_info(json_path='system_info.json') -> Dict[str, Any]:
-    """
-    Load system information from JSON file.
-    """
+    """Load system information from JSON file."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     system_info_full_path = os.path.join(project_root, json_path)
 
@@ -62,9 +58,7 @@ def load_system_info(json_path='system_info.json') -> Dict[str, Any]:
         sys.exit(1)
 
 def display_system_info(system_info: Dict[str, Any]) -> None:
-    """
-    Display system information in a formatted table.
-    """
+    """Display system information in a formatted table."""
     table = Table(title="System Information", box=box.ROUNDED)
     table.add_column("Field", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
@@ -95,9 +89,7 @@ def display_system_info(system_info: Dict[str, Any]) -> None:
     console.print(table)
 
 def submit_registration(submission: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Submit registration to the API.
-    """
+    """Submit registration to the API."""
     try:
         with spinner():
             api_url = 'https://orchestrator-gekh.onrender.com/api/v1/miners/'
@@ -137,9 +129,7 @@ def submit_registration(submission: Dict[str, Any]) -> Dict[str, Any]:
         sys.exit(1)
 
 def display_registration_success(result: Dict[str, Any]) -> None:
-    """
-    Display successful registration details.
-    """
+    """Display successful registration details."""
     miner_id = result.get('miner_id', 'N/A')
     message = result.get('message', 'Registration successful')
     added_resources = result.get('added_resources', [])
@@ -154,9 +144,7 @@ def display_registration_success(result: Dict[str, Any]) -> None:
     ))
 
 def process_compute_resource(resource: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Process and validate a compute resource.
-    """
+    """Process and validate a compute resource."""
     return {
         "id": resource.get("id"),
         "resource_type": resource.get("resource_type"),
@@ -281,9 +269,7 @@ def process_ssh(ssh_str: str) -> str:
     raise ValueError(f"Invalid SSH format: {ssh_str}")
 
 def register_miner():
-    """
-    Main registration function.
-    """
+    """Main registration function."""
     user_manager = UserManager()
     
     # Check for existing registration
@@ -319,8 +305,7 @@ def register_miner():
         return
 
     # Handle Commune network registration
-    wallet_name = None
-    commune_uid = None
+    commune_credentials = None
     if network_type == NetworkType.COMMUNE:
         result = network_handler.handle_commune_registration()
         if not result:
@@ -330,7 +315,12 @@ def register_miner():
                 border_style="red"
             ))
             sys.exit(1)
-        wallet_name, commune_uid = result
+        wallet_name, commune_uid, wallet_address = result
+        commune_credentials = {
+            "wallet_name": wallet_name,
+            "commune_uid": commune_uid,
+            "wallet_address": wallet_address
+        }
 
     # Prepare submission
     submission = {
@@ -369,22 +359,45 @@ def register_miner():
         display_registration_success(result)
 
         # Handle Commune network post-registration
-        if network_type == NetworkType.COMMUNE and commune_uid:
-            commune_result = network_handler.register_commune_miner(
-                result['miner_id'],
-                commune_uid
-            )
-            if commune_result:
-                console.print(Panel(
-                    "[green]Successfully registered with Commune network![/green]\n"
-                    f"Wallet Name: [cyan]{wallet_name}[/cyan]\n"
-                    f"Commune UID: [cyan]{commune_uid}[/cyan]",
-                    title="🌐 Commune Registration Status",
-                    border_style="green"
-                ))
-            else:
+        if network_type == NetworkType.COMMUNE and commune_credentials:
+            try:
+                commune_result = network_handler.register_commune_miner(
+                    miner_id=result['miner_id'],
+                    wallet_name=commune_credentials["wallet_name"],
+                    commune_uid=commune_credentials["commune_uid"],
+                    wallet_address=commune_credentials["wallet_address"]
+                )
+                
+                if commune_result and commune_result.get('status') == 'success':
+                    # Verify registration
+                    if network_handler.verify_commune_status(result['miner_id']):
+                        console.print(Panel(
+                            "[green]Successfully registered with Commune network![/green]\n" f"Wallet Name: [cyan]{commune_credentials['wallet_name']}[/cyan]\n"
+                            f"Commune UID: [cyan]{commune_credentials['commune_uid']}[/cyan]\n"
+                            f"Wallet Address: [cyan]{commune_credentials['wallet_address']}[/cyan]",
+                            title="🌐 Commune Registration Status",
+                            border_style="green"
+                        ))
+                    else:
+                        console.print(Panel(
+                            "[yellow]Registration successful but verification failed.[/yellow]\n"
+                            "Please verify your registration status manually.",
+                            title="⚠️ Verification Warning",
+                            border_style="yellow"
+                        ))
+                else:
+                    console.print(Panel(
+                        "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]\n"
+                        f"Error: {commune_result.get('message') if commune_result else 'Unknown error'}\n"
+                        "You can try registering with Commune network later using your miner ID.",
+                        title="⚠️ Partial Registration",
+                        border_style="yellow"
+                    ))
+                    
+            except Exception as e:
                 console.print(Panel(
                     "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]\n"
+                    f"Error: {str(e)}\n"
                     "You can try registering with Commune network later using your miner ID.",
                     title="⚠️ Partial Registration",
                     border_style="yellow"

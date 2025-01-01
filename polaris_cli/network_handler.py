@@ -1,5 +1,3 @@
-# network_handler.py
-
 import logging
 import platform
 import sys
@@ -101,6 +99,7 @@ class CrossPlatformMenu:
 class NetworkSelectionHandler:
     def __init__(self):
         self.console = Console()
+        self.api_base_url = 'https://orchestrator-gekh.onrender.com/api/v1'  # Update with your actual API URL
         
     def select_network(self):
         """Display network options with cross-platform arrow key selection."""
@@ -142,6 +141,9 @@ class NetworkSelectionHandler:
             
         try:
             with console.status("[bold cyan]Retrieving Commune UID..."):
+                # Get wallet key and SS58 address
+                key = classic_load_key(wallet_name)
+                ss58_address = key.ss58_address
                 commune_uid = self._get_commune_uid(wallet_name)
                 
             if not commune_uid or commune_uid == "Miner not found":
@@ -149,7 +151,7 @@ class NetworkSelectionHandler:
                 return None
                 
             console.print(f"[green]Successfully retrieved Commune UID: {commune_uid}[/green]")
-            return wallet_name, commune_uid
+            return wallet_name, commune_uid, ss58_address
             
         except Exception as e:
             console.print(f"[red]Error in Commune registration: {e}[/red]")
@@ -175,23 +177,71 @@ class NetworkSelectionHandler:
             logger.error(f"Error retrieving miner UID: {e}")
             return None
 
-    def register_commune_miner(self, miner_id, commune_uid):
+    def register_commune_miner(self, miner_id: str, wallet_name: str, commune_uid: str, wallet_address: str):
         """Register miner with Commune network."""
         try:
-            api_url = 'https://orchestrator-gekh.onrender.com/api/v1/commune_miner'
+            api_url = f'{self.api_base_url}/commune/register'
+            
             payload = {
                 'miner_id': miner_id,
-                'commune_uid': commune_uid
+                'commune_uid': commune_uid,
+                'wallet_name': wallet_name,
+                'wallet_address': wallet_address,
+                'netuid': 13  # Default netuid for Commune
             }
             
             with console.status("[bold cyan]Registering with Commune network..."):
                 response = requests.post(api_url, json=payload)
                 response.raise_for_status()
-                return response.json()
                 
+                result = response.json()
+                if result['status'] == 'success':
+                    console.print("[green]Successfully registered with Commune network![/green]")
+                    console.print(Panel(
+                        f"[cyan]Registration Details:[/cyan]\n"
+                        f"Miner ID: {miner_id}\n"
+                        f"Commune UID: {commune_uid}\n"
+                        f"Wallet: {wallet_name}",
+                        title="✅ Registration Complete"
+                    ))
+                    return result
+                else:
+                    console.print(f"[red]Registration failed: {result.get('message', 'Unknown error')}[/red]")
+                    return None
+                
+        except requests.exceptions.RequestException as e:
+            console.print(f"[red]Failed to connect to registration service: {e}[/red]")
+            return None
         except Exception as e:
             console.print(f"[red]Failed to register with Commune network: {e}[/red]")
             return None
+
+    async def verify_commune_status(self, miner_id: str):
+        """Verify Commune registration status."""
+        try:
+            api_url = f'{self.api_base_url}/commune/miner/{miner_id}/verify'
+            
+            with console.status("[bold cyan]Verifying Commune registration..."):
+                response = requests.get(api_url)
+                response.raise_for_status()
+                
+                result = response.json()
+                if result['status'] == 'ok':
+                    console.print(Panel(
+                        f"[cyan]Commune Status:[/cyan]\n"
+                        f"Status: {result.get('miner_status', 'Unknown')}\n"
+                        f"Commune UID: {result.get('commune_uid', 'Unknown')}\n"
+                        f"Last Updated: {result.get('last_updated', 'Unknown')}",
+                        title="✅ Verification Complete"
+                    ))
+                    return True
+                else:
+                    console.print(f"[yellow]Verification failed: {result.get('message', 'Unknown error')}[/yellow]")
+                    return False
+                    
+        except Exception as e:
+            console.print(f"[red]Failed to verify Commune status: {e}[/red]")
+            return False
 
     def handle_bittensor_registration(self):
         """Handle Bittensor network registration."""
