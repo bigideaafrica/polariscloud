@@ -1,4 +1,4 @@
-# Polaris CLI Tool
+# Polaris Subnet Docs
 
 A modern development workspace manager for distributed compute resources. Polaris simplifies managing compute resources, monitoring their status, and automating key tasks in a distributed environment.
 
