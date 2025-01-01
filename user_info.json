@@ -1,13 +1,13 @@
 {
-    "miner_id": "Pr1L34ioD8GHkwnhJR0q",
+    "miner_id": "PoWBMaxcQvtWmXgiUSVn",
     "username": "hp_user",
     "network_info": {
         "internal_ip": "192.168.244.33",
-        "ssh": "ssh://HP@0.tcp.in.ngrok.io:12583",
+        "ssh": "ssh://HP@0.tcp.eu.ngrok.io:18022",
+        "password": "banadda",
+        "username": "HP",
         "open_ports": [
             "22"
-        ],
-        "password": "banadda",
-        "username": "HP"
+        ]
     }
 }
