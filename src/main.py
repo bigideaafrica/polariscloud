@@ -2,6 +2,7 @@ import ctypes
 import json
 import logging
 import os
+import platform
 import signal
 import subprocess
 import sys
@@ -19,34 +20,50 @@ from src.utils import configure_logging, get_local_ip, get_project_root
 
 logger = configure_logging()
 
+def is_windows():
+    """Check if the current platform is Windows."""
+    return platform.system().lower() == 'windows'
+
 def is_admin():
-    """Check if the script is running with administrative privileges on Windows."""
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except AttributeError:
-        return False
+    """Check if the script is running with administrative privileges."""
+    if is_windows():
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except AttributeError:
+            return False
+    else:
+        # On Unix systems, check if running as root
+        return os.geteuid() == 0
 
 def run_as_admin():
-    """
-    Relaunch the current script with administrative privileges on Windows.
-    """
-    try:
-        script_path = os.path.abspath(__file__)
-        params = f'"{script_path}"'
-        
-        ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            sys.executable,
-            params,
-            None,
-            1
-        )
-        logger.info("Script relaunched with administrative privileges.")
-        return True
-    except Exception as e:
-        logger.exception(f"Failed to get admin rights: {e}")
-        return False
+    """Relaunch the script with administrative privileges."""
+    if is_windows():
+        try:
+            script_path = os.path.abspath(__file__)
+            params = f'"{script_path}"'
+            
+            ctypes.windll.shell32.ShellExecuteW(
+                None,
+                "runas",
+                sys.executable,
+                params,
+                None,
+                1
+            )
+            logger.info("Script relaunched with administrative privileges.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to get admin rights: {e}")
+            return False
+    else:
+        try:
+            if os.geteuid() != 0:
+                logger.info("Restarting with sudo...")
+                os.execvp('sudo', ['sudo', 'python3'] + sys.argv)
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to get root privileges: {e}")
+            return False
 
 def create_ssh_directory_windows():
     """Create SSH directory on Windows with administrative privileges."""
@@ -78,6 +95,13 @@ def create_ssh_directory_windows():
     except Exception as e:
         logger.error(f"Failed to create SSH directory: {e}")
         return False
+
+def configure_ssh():
+    """Configure SSH server based on platform."""
+    if is_windows():
+        return configure_ssh_windows()
+    else:
+        return configure_ssh_linux()
 
 def configure_ssh_windows():
     """Configure SSH server on Windows."""
@@ -112,6 +136,44 @@ def configure_ssh_windows():
         logger.error("SSH server configuration failed.")
         return False
 
+def configure_ssh_linux():
+    """Configure SSH server on Linux."""
+    try:
+        # Check if OpenSSH server is installed
+        check_cmd = "which sshd"
+        result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            # Install OpenSSH server if not present
+            if os.path.exists("/etc/debian_version"):
+                install_cmd = "apt-get update && apt-get install -y openssh-server"
+            elif os.path.exists("/etc/redhat-release"):
+                install_cmd = "yum install -y openssh-server"
+            else:
+                logger.error("Unsupported Linux distribution")
+                return False
+            
+            subprocess.run(install_cmd, shell=True, check=True)
+        
+        # Start and enable SSH service
+        commands = [
+            "systemctl start sshd",
+            "systemctl enable sshd"
+        ]
+        
+        for cmd in commands:
+            subprocess.run(cmd, shell=True, check=True)
+        
+        logger.info("SSH server configured successfully on Linux")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to configure SSH server: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error configuring SSH server: {e}")
+        return False
+
 def run_as_admin_command(command):
     """Run a command with administrative privileges."""
     try:
@@ -132,8 +194,15 @@ def run_as_admin_command(command):
         logger.exception(f"Error running command '{' '.join(command)}': {e}")
         return False
 
+def setup_firewall():
+    """Configure firewall based on platform."""
+    if is_windows():
+        return setup_firewall_windows()
+    else:
+        return setup_firewall_linux()
+
 def setup_firewall_windows():
-    """Configure Windows Firewall to allow SSH connections."""
+    """Configure Windows Firewall."""
     firewall_cmd = 'netsh advfirewall firewall add rule name="OpenSSH" dir=in action=allow protocol=TCP localport=22'
     if run_as_admin_command(firewall_cmd.split()):
         logger.info("Windows Firewall configured to allow SSH connections on port 22.")
@@ -142,37 +211,51 @@ def setup_firewall_windows():
         logger.warning("Failed to configure Windows Firewall for SSH. SSH access might be blocked.")
         return False
 
+def setup_firewall_linux():
+    """Configure Linux firewall (UFW/iptables)."""
+    try:
+        # Check if UFW is available
+        ufw_check = subprocess.run(['which', 'ufw'], capture_output=True)
+        if ufw_check.returncode == 0:
+            subprocess.run(['ufw', 'allow', '22/tcp'], check=True)
+            subprocess.run(['ufw', '--force', 'enable'], check=True)
+        else:
+            # Fallback to iptables
+            subprocess.run(['iptables', '-A', 'INPUT', '-p', 'tcp', '--dport', '22', '-j', 'ACCEPT'], check=True)
+            
+        logger.info("Firewall configured successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure firewall: {e}")
+        return False
+
 def format_network_info(username: str, password: str, host: str, port: int) -> dict:
     """Format network information according to API requirements."""
     return {
-        "internal_ip": str(get_local_ip()),  # Ensure string type
+        "internal_ip": str(get_local_ip()),
         "ssh": f"ssh://{username}@{host}:{port}",
-        "open_ports": ["22"],  # Always a list of strings
+        "open_ports": ["22"],
         "password": str(password),
-        "username": str(username)  # Ensure string type
+        "username": str(username)
     }
 
 def save_and_sync_info(system_info, filename='system_info.json'):
     """Save system info and sync network details."""
     try:
-        # Save system info
         root_dir = get_project_root()
         abs_path = os.path.join(root_dir, filename)
         with open(abs_path, 'w') as f:
             json.dump([system_info], f, indent=4)
         logger.debug(f"System information saved to {abs_path}")
 
-        # Check for existing registration silently
         user_manager = UserManager()
         has_registration, user_info = user_manager.check_existing_registration(show_prompt=False)
         
         if has_registration and user_info:
-            # Sync network information
             sync_manager = SyncManager()
             if sync_manager.sync_network_info():
                 logger.info("Network information synchronized successfully")
                 
-                # Verify sync status
                 overall_status, component_status = sync_manager.verify_sync_status()
                 if not overall_status:
                     logger.warning("Sync verification failed:")
@@ -193,7 +276,7 @@ def handle_shutdown(signum, frame):
 def main():
     logger.debug("Starting Polaris main function.")
     
-    # Ensure admin rights
+    # Ensure admin/root rights
     if not is_admin():
         logger.warning("Restarting script with administrative privileges...")
         if run_as_admin():
@@ -214,13 +297,13 @@ def main():
     
     ngrok = None
     try:
-        # Configure SSH
-        if not configure_ssh_windows():
-            logger.error("Failed to configure SSH on Windows.")
+        # Configure SSH based on platform
+        if not configure_ssh():
+            logger.error("Failed to configure SSH.")
             sys.exit(1)
         
         # Setup firewall
-        if not setup_firewall_windows():
+        if not setup_firewall():
             logger.warning("Could not configure firewall. SSH access might be blocked.")
         
         while True:
@@ -314,14 +397,3 @@ def main():
                 
     except KeyboardInterrupt:
         logger.info("\nShutdown requested. Cleaning up...")
-    except Exception as e:
-        logger.exception(f"Error during setup: {e}")
-    finally:
-        if ngrok:
-            logger.info("Stopping ngrok tunnel...")
-            ngrok.kill_existing()
-        remove_pid_file()
-        logger.info("Shutdown complete.")
-
-if __name__ == "__main__":
-    main()
