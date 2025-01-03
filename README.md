@@ -384,7 +384,7 @@ For complete technical documentation, including API endpoints, data models, erro
 ## Author
 
 **Polaris Team**  
-Contact: [fred@polariscloud.ai](mailto:fred@polariscloud.ai)
+Commune Discord : Channel 33
 
 ---
 
