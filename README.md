@@ -101,6 +101,11 @@ compute_subnet started successfully with PID 56789.
 Logs: stdout -> logs/polaris_stdout.log, stderr -> logs/polaris_stderr.log
 ```
 
+**Note:**
+```
+After running polaris start, a number of terminals will be launched indicating ngrok start process after ngrouk is fully launched the terminals can be closed
+```
+
 ---
 
 ### **Register a New Miner**
