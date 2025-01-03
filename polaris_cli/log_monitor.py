@@ -1,15 +1,19 @@
+import msvcrt
 import os
 import platform
 import sys
 import time
+from datetime import datetime
 from queue import Queue
 from threading import Event, Thread
 
 import psutil
+from rich import box
 from rich.console import Console
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
+from rich.style import Style
 from rich.table import Table
 from rich.text import Text
 
@@ -25,21 +29,17 @@ class BaseLogReader:
         self.last_position = 0
         
     def _read_existing_content(self):
-        """Read existing content using efficient buffered reading."""
+        """Read existing content exactly as is"""
         try:
             with open(self.log_path, 'r', buffering=1) as f:
-                chunk_size = 8192
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    lines = chunk.splitlines()
-                    for line in lines:
-                        if line:  # Skip empty lines
-                            self.queue.put((self.log_type, line, False))
+                content = f.read()
                 self.last_position = f.tell()
+                lines = content.splitlines()
+                for line in lines:
+                    if line:  # Only send non-empty lines
+                        self.queue.put((self.log_type, line, False))
         except Exception as e:
-            self.queue.put((self.log_type, f"[red]Error reading existing log: {e}[/red]", False))
+            self.queue.put((self.log_type, f"Error reading log: {e}", False))
 
     def start(self):
         self._read_existing_content()
@@ -56,7 +56,6 @@ class BaseLogReader:
 
 class UnixLogReader(BaseLogReader):
     def _read_log(self):
-        """Monitor log file using select.poll() for Unix systems."""
         try:
             import select
             with open(self.log_path, 'r') as f:
@@ -65,7 +64,7 @@ class UnixLogReader(BaseLogReader):
                 poll_obj.register(fd, select.POLLIN)
 
                 while self.running.is_set():
-                    events = poll_obj.poll(100)  # 100ms timeout
+                    events = poll_obj.poll(100)
                     if events:
                         f.seek(self.last_position)
                         new_content = f.read()
@@ -76,75 +75,14 @@ class UnixLogReader(BaseLogReader):
                             for line in lines:
                                 if line:
                                     self.queue.put((self.log_type, line, True))
-                    
         except Exception as e:
-            self.queue.put((self.log_type, f"[red]Error monitoring log: {e}[/red]", True))
+            self.queue.put((self.log_type, f"Error monitoring log: {e}", True))
 
 class WindowsLogReader(BaseLogReader):
     def _read_log(self):
-        """Monitor log file using Windows API."""
         try:
-            import win32con
-            import win32file
-            
-            directory = os.path.dirname(self.log_path)
-            file_name = os.path.basename(self.log_path)
-            
-            handle = win32file.CreateFile(
-                directory,
-                win32con.GENERIC_READ,
-                win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE | win32con.FILE_SHARE_DELETE,
-                None,
-                win32con.OPEN_EXISTING,
-                win32con.FILE_FLAG_BACKUP_SEMANTICS,
-                None
-            )
-            
-            while self.running.is_set():
-                try:
-                    results = win32file.ReadDirectoryChangesW(
-                        handle,
-                        1024,
-                        False,
-                        win32con.FILE_NOTIFY_CHANGE_LAST_WRITE,
-                        None,
-                        None
-                    )
-                    
-                    for action, file in results:
-                        if file == file_name and action == win32con.FILE_ACTION_MODIFIED:
-                            with open(self.log_path, 'r') as f:
-                                f.seek(self.last_position)
-                                new_content = f.read()
-                                self.last_position = f.tell()
-                                
-                                if new_content:
-                                    lines = new_content.splitlines()
-                                    for line in lines:
-                                        if line:
-                                            self.queue.put((self.log_type, line, True))
-                    
-                    time.sleep(0.05)
-                    
-                except Exception as e:
-                    # Handle temporary file system issues
-                    time.sleep(0.1)
-                    continue
-                    
-        except Exception as e:
-            self.queue.put((self.log_type, f"[red]Error monitoring log: {e}[/red]", True))
-        finally:
-            try:
-                win32file.CloseHandle(handle)
-            except:
-                pass
-
-class FallbackLogReader(BaseLogReader):
-    def _read_log(self):
-        """Fallback monitoring method using basic file reading."""
-        try:
-            while self.running.is_set():
-                with open(self.log_path, 'r') as f:
+            with open(self.log_path, 'r') as f:
+                while self.running.is_set():
                     f.seek(self.last_position)
                     new_content = f.read()
                     if new_content:
@@ -153,34 +91,22 @@ class FallbackLogReader(BaseLogReader):
                         for line in lines:
                             if line:
                                 self.queue.put((self.log_type, line, True))
-                time.sleep(0.1)
+                    time.sleep(0.1)
         except Exception as e:
-            self.queue.put((self.log_type, f"[red]Error monitoring log: {e}[/red]", True))
+            self.queue.put((self.log_type, f"Error monitoring log: {e}", True))
 
 def get_log_reader_class():
-    """Get the appropriate log reader class for the current platform."""
     system = platform.system().lower()
-    
     if system == 'windows':
-        try:
-            import win32file
-            return WindowsLogReader
-        except ImportError:
-            console.print("[yellow]pywin32 not found, using fallback monitor[/yellow]")
-            return FallbackLogReader
-    elif system in ('linux', 'darwin', 'freebsd', 'openbsd', 'netbsd'):
-        try:
-            import select
-            return UnixLogReader
-        except ImportError:
-            return FallbackLogReader
+        return WindowsLogReader
     else:
-        return FallbackLogReader
+        return UnixLogReader
 
-class RealTimeProcessMonitor:
+class ProcessStats:
     def __init__(self, pid):
         self.pid = pid
         self.process = psutil.Process(pid)
+        self.start_time = datetime.now()
         self.last_cpu_time = None
         self.last_check_time = None
         
@@ -192,10 +118,7 @@ class RealTimeProcessMonitor:
                 
                 if self.last_cpu_time is not None:
                     time_diff = current_time - self.last_check_time
-                    if time_diff > 0:  # Avoid division by zero
-                        cpu_percent = (current_cpu_time - self.last_cpu_time) / time_diff * 100
-                    else:
-                        cpu_percent = 0.0
+                    cpu_percent = ((current_cpu_time - self.last_cpu_time) / time_diff * 100) if time_diff > 0 else 0.0
                 else:
                     cpu_percent = 0.0
                 
@@ -203,133 +126,226 @@ class RealTimeProcessMonitor:
                 self.last_check_time = current_time
                 
                 memory_info = self.process.memory_info()
-                status = self.process.status()
+                uptime = datetime.now() - self.start_time
+                uptime_str = str(uptime).split('.')[0]
                 
-                try:
-                    io_counters = self.process.io_counters()
-                    io_info = (
-                        f"IO Read: {io_counters.read_bytes / 1024 / 1024:.1f} MB\n"
-                        f"IO Write: {io_counters.write_bytes / 1024 / 1024:.1f} MB"
-                    )
-                except (psutil.AccessDenied, AttributeError):
-                    io_info = "IO Stats: Not available"
+                status_text = Text()
+                status_text.append("✨ Process Statistics\n\n", style="bold cyan")
+                status_text.append("PID: ", style="bold blue")
+                status_text.append(f"{self.pid}\n", style="white")
+                status_text.append("Uptime: ", style="bold blue")
+                status_text.append(f"{uptime_str}\n", style="white")
+                status_text.append("CPU: ", style="bold blue")
+                status_text.append(f"{cpu_percent:.1f}%\n", style="green")
+                status_text.append("Memory: ", style="bold blue")
+                status_text.append(f"{memory_info.rss / 1024 / 1024:.1f} MB\n", style="green")
+                status_text.append("Status: ", style="bold blue")
+                status_text.append(f"{self.process.status()}\n", style="white")
                 
                 return Panel(
-                    f"[bold green]Process Status[/bold green]\n"
-                    f"PID: {self.pid}\n"
-                    f"CPU Usage: {cpu_percent:.1f}%\n"
-                    f"Memory: {memory_info.rss / 1024 / 1024:.1f} MB\n"
-                    f"Status: {status}\n"
-                    f"{io_info}",
-                    border_style="green"
+                    status_text,
+                    border_style="cyan",
+                    box=box.ROUNDED,
+                    title="[bold cyan]Compute Subnet Monitor[/bold cyan]",
+                    subtitle="[dim]↑/↓ to scroll · Ctrl+C to exit[/dim]"
                 )
         except psutil.NoSuchProcess:
-            return Panel("[red]Process terminated[/red]", border_style="red")
+            return Panel(
+                "[red]Process terminated[/red]", 
+                border_style="red",
+                box=box.ROUNDED
+            )
         except Exception as e:
-            return Panel(f"[red]Monitor error: {e}[/red]", border_style="red")
+            return Panel(
+                f"[red]Monitor error: {e}[/red]",
+                border_style="red",
+                box=box.ROUNDED
+            )
 
-def format_logs(stdout_lines, stderr_lines, max_lines=1000):
-    table = Table(show_header=True, header_style="bold magenta", box=None, expand=True)
-    table.add_column("Type", style="cyan", no_wrap=True, width=8)
-    table.add_column("Content", style="white", ratio=1)
-    table.add_column("Status", style="green", width=8)
+def parse_log_line(line):
+    """Parse log line exactly as it appears in the file"""
+    try:
+        # Handle Cryptography warnings with file paths
+        if "CryptographyDeprecationWarning" in line:
+            if ":" in line:
+                file_path, rest = line.split(":", 1)
+                if ".py" in file_path:
+                    file_num, message = rest.split(":", 1)
+                    return f"{file_path}:{file_num}", "Warning", message.strip()
+            return "", "Warning", line.strip()
 
-    stdout_lines = stdout_lines[-max_lines:]
-    stderr_lines = stderr_lines[-max_lines:]
+        # Handle JSON-like dictionary entries
+        if line.strip().startswith('"') and ":" in line:
+            return "", "", line.strip()
 
-    rows = []
-    for line, is_new in stdout_lines:
-        rows.append(("OUT", line, "NEW" if is_new else ""))
-    for line, is_new in stderr_lines:
-        rows.append(("ERR", Text(line, style="red"), "NEW" if is_new else ""))
+        # Handle standard timestamp format
+        if line.strip().startswith("2025-"):
+            try:
+                date_time = line[:23]  # Get "2025-01-03 07:11:44,084"
+                msg = line[23:].strip()
+                return date_time, "", msg
+            except:
+                return "", "", line.strip()
+
+        return "", "", line.strip()
+    except Exception:
+        return "", "", line.strip()
+
+def format_logs(log_lines, max_lines=1000, visible_lines=20):
+    table = Table(
+        show_header=True,
+        header_style="bold cyan",
+        box=box.ROUNDED,
+        expand=True,
+        title="[bold cyan]Compute Subnet Logs[/bold cyan]",
+        caption=f"[dim]Showing {min(len(log_lines), max_lines)} logs (↑/↓ to scroll)[/dim]",
+        padding=(0, 1),
+        collapse_padding=True
+    )
     
-    for row in rows:
+    table.add_column("Source/Time", style="cyan", no_wrap=True)
+    table.add_column("Level", style="bold yellow", width=10)
+    table.add_column("Message", style="white", ratio=1)
+    table.add_column("", style="green dim", width=3)
+
+    # Keep only the last max_lines
+    log_lines = log_lines[-max_lines:]
+    rows = []
+    
+    for line, is_new in log_lines:
+        source_time, level, message = parse_log_line(str(line))
+        
+        # Determine message style based on content
+        if "class" in message or "cipher" in message:
+            msg_style = Style(color="yellow", dim=True)
+        elif " - INFO" in message:
+            msg_style = Style(color="green")
+        elif "WARNING" in message or "Warning" in level:
+            msg_style = Style(color="yellow")
+        elif "ERROR" in message:
+            msg_style = Style(color="red")
+        else:
+            msg_style = Style(color="white")
+
+        rows.append((
+            Text(source_time, style="cyan"),
+            Text(level, style="yellow bold") if level else Text(""),
+            Text(message, style=msg_style),
+            "●" if is_new else ""
+        ))
+
+    # Custom sort: Warnings first, then timestamps
+    def sort_key(row):
+        timestamp = row[0].plain
+        if "Warning" in row[1].plain:
+            return (0, timestamp)
+        if timestamp.startswith("2025-"):
+            return (1, timestamp)
+        return (2, timestamp)
+    
+    rows.sort(key=sort_key)
+    
+    # Calculate visible range for scrolling
+    total_rows = len(rows)
+    scroll_position = getattr(format_logs, 'scroll_position', 0)
+    
+    # Ensure scroll position is within bounds
+    max_scroll = max(0, total_rows - visible_lines)
+    scroll_position = max(0, min(scroll_position, max_scroll))
+    format_logs.scroll_position = scroll_position
+    
+    # Only add visible rows
+    start_idx = scroll_position
+    end_idx = min(start_idx + visible_lines, total_rows)
+    
+    visible_rows = rows[start_idx:end_idx]
+    for row in visible_rows:
         table.add_row(*row)
 
     return table
 
-def monitor_process_and_logs(process_pid=None):
-    stdout_log, stderr_log = get_log_paths()
+def get_log_path():
+    """Get path to the compute subnet stderr log file"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    log_dir = os.path.join(project_root, 'logs')
+    return os.path.join(log_dir, 'compute_subnet_stderr.log')
+
+def monitor_logs(process_pid=None):
+    log_path = get_log_path()
+    format_logs.scroll_position = 0  # Initialize scroll position
     
-    # Create log directory if it doesn't exist
-    log_dir = os.path.dirname(stdout_log)
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-        
-    # Create empty log files if they don't exist
-    for log_file in [stdout_log, stderr_log]:
-        if not os.path.exists(log_file):
-            with open(log_file, 'w') as f:
-                pass  # Create empty file
+    # Ensure log directory exists
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    if not os.path.exists(log_path):
+        open(log_path, 'a').close()
 
     try:
-        stdout_lines = []
-        stderr_lines = []
+        log_lines = []
         log_queue = Queue()
         
         LogReader = get_log_reader_class()
-        stdout_reader = LogReader(stdout_log, "stdout", log_queue)
-        stderr_reader = LogReader(stderr_log, "stderr", log_queue)
+        reader = LogReader(log_path, "stderr", log_queue)
         
-        process_monitor = None
+        process_stats = None
         if process_pid:
             try:
-                process_monitor = RealTimeProcessMonitor(process_pid)
+                process_stats = ProcessStats(process_pid)
             except psutil.NoSuchProcess:
                 console.print("[red]Process not found.[/red]")
                 return False
 
-        stdout_reader.start()
-        stderr_reader.start()
+        reader.start()
 
-        with Live(auto_refresh=True, refresh_per_second=30) as live:
+        with Live(
+            auto_refresh=True,
+            refresh_per_second=4,
+            vertical_overflow="visible",
+            screen=True,
+            console=Console(force_terminal=True)
+        ) as live:
             try:
                 while True:
-                    while not log_queue.empty():
-                        log_type, line, is_new = log_queue.get_nowait()
-                        if log_type == "stdout":
-                            stdout_lines.append((line, is_new))
-                        else:
-                            stderr_lines.append((line, is_new))
+                    # Handle keyboard input for scrolling
+                    if msvcrt.kbhit():
+                        key = msvcrt.getch()
+                        if key == b'H':  # Up arrow
+                            format_logs.scroll_position = max(0, format_logs.scroll_position - 1)
+                        elif key == b'P':  # Down arrow
+                            format_logs.scroll_position = format_logs.scroll_position + 1
 
-                    process_status = process_monitor.get_status() if process_monitor else None
-                    log_table = format_logs(stdout_lines, stderr_lines)
-                    
+                    while not log_queue.empty():
+                        _, line, is_new = log_queue.get_nowait()
+                        log_lines.append((line, is_new))
+
                     layout = Layout()
-                    if process_status:
-                        layout.split(
-                            Layout(process_status, size=8),
-                            Layout(log_table)
+                    
+                    if process_stats:
+                        layout.split_column(
+                            Layout(process_stats.get_status(), size=10),
+                            Layout(format_logs(log_lines))
                         )
                     else:
-                        layout.update(log_table)
+                        layout.update(format_logs(log_lines))
                     
                     live.update(layout)
+                    time.sleep(0.1)  # Shorter sleep for more responsive scrolling
 
             except KeyboardInterrupt:
                 console.print("\n[yellow]Monitoring stopped.[/yellow]")
             finally:
-                stdout_reader.stop()
-                stderr_reader.stop()
+                reader.stop()
 
     except Exception as e:
         console.print(f"[red]Monitor failed: {e}[/red]")
+        console.print(f"[red]Error details: {str(e)}[/red]")
         return False
 
-def get_log_paths():
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_dir = os.path.join(project_root, 'logs')
-    return (
-        os.path.join(log_dir, 'polaris_stdout.log'),
-        os.path.join(log_dir, 'polaris_stderr.log')
-    )
-
-def get_main_process_pid():
+def get_compute_subnet_pid():
     try:
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        for proc in psutil.process_iter(['pid', 'cmdline']):
             try:
                 cmdline = proc.cmdline()
-                if len(cmdline) > 1 and 'main.py' in cmdline[1]:
+                if len(cmdline) > 1 and 'compute_subnet' in ' '.join(cmdline):
                     return proc.pid
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
@@ -339,10 +355,24 @@ def get_main_process_pid():
         return None
 
 def check_main():
-    pid = get_main_process_pid()
-    if pid:
-        console.print(f"[green]Process running (PID: {pid})[/green]")
-        console.print("[yellow]Starting monitor (Ctrl+C to stop)...[/yellow]")
-        monitor_process_and_logs(pid)
-    else:
-        console.print("[red]Process not running.[/red]")
+    try:
+        console.clear()
+        console.print("[cyan]🔍 Looking for compute subnet process...[/cyan]")
+        pid = get_compute_subnet_pid()
+        
+        if pid:
+            console.print(f"[green]✓ Found compute subnet process (PID: {pid})[/green]")
+            console.print("[cyan]📊 Starting monitor...[/cyan]")
+            monitor_logs(pid)
+        else:
+            console.print("[yellow]⚠ Compute subnet process not found. Monitoring logs only...[/yellow]")
+            monitor_logs(None)
+            
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    check_main()

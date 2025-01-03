@@ -12,6 +12,9 @@ import psutil
 from dotenv import load_dotenv
 from rich.console import Console
 
+from polaris_cli.repo_manager import (ensure_repository_exists,
+                                      update_repository)
+
 # Initialize logging and console
 logging.basicConfig(
     level=logging.INFO,
@@ -169,7 +172,7 @@ def start_process(process_name, script_path, env_vars=None):
         return False
 
 def start_polaris():
-    """Start both Polaris and Compute Subnet processes"""
+    """Start both Polaris and Compute Subnet processes with repository checks"""
     ensure_pid_directory()
 
     # Load environment variables
@@ -181,25 +184,46 @@ def start_polaris():
     if not ssh_password:
         console.print("[red]SSH_PASSWORD not found in .env file.[/red]")
         sys.exit(1)
-
-    # Start polaris process
-    polaris_script = os.path.join(get_project_root(), 'src', 'main.py')
-    if not start_process('polaris', polaris_script, {'SSH_PASSWORD': ssh_password}):
+        
+    # First ensure repository exists and get compute script path
+    success, compute_script = ensure_repository_exists()
+    if not success or not compute_script:
+        console.print("[red]Failed to ensure compute subnet repository exists.[/red]")
+        sys.exit(1)
+        
+    # Then update it to latest version
+    if not update_repository():
+        console.print("[red]Failed to update compute subnet repository.[/red]")
         sys.exit(1)
 
-    # Start compute_subnet process
-    compute_script = os.path.join(get_project_root(), 'compute_subnet', 'main.py')
+    # Start local polaris process
+    polaris_script = os.path.join(get_project_root(), 'src', 'main.py')
+    if not os.path.exists(polaris_script):
+        console.print(f"[red]Local Polaris script not found at: {polaris_script}[/red]")
+        sys.exit(1)
+
+    logger.info(f"Starting local Polaris from: {polaris_script}")
+    if not start_process('local_polaris', polaris_script, {'SSH_PASSWORD': ssh_password}):
+        sys.exit(1)
+
+    # Start the compute subnet's main.py
+    if not os.path.exists(compute_script):
+        console.print(f"[red]Compute subnet script not found at: {compute_script}[/red]")
+        stop_polaris()  # Stop the local polaris if compute subnet script is missing
+        sys.exit(1)
+
+    logger.info(f"Starting compute subnet from: {compute_script}")
     if not start_process('compute_subnet', compute_script, {'SSH_PASSWORD': ssh_password}):
         # If compute_subnet fails, stop polaris as well
         stop_polaris()
         sys.exit(1)
 
-    # Start heartbeat service with corrected path
+    # Start heartbeat service
     heartbeat_script = os.path.join(get_project_root(), 'polaris_cli', 'heartbeat_service.py')
     logger.info(f"Starting heartbeat service from path: {heartbeat_script}")
     if not start_process('heartbeat', heartbeat_script, {'SSH_PASSWORD': ssh_password}):
         console.print("[yellow]Warning: Failed to start heartbeat service.[/yellow]")
-        logger.error("Failed to start heartbeat service")
+        logger.warning("Failed to start heartbeat service")
 
 def stop_process(pid, process_name, force=False):
     """Stop a single process with privilege handling"""
@@ -243,7 +267,7 @@ def stop_polaris():
     success = True
     
     # Stop processes in reverse order
-    for process_name in ['compute_subnet', 'polaris', 'heartbeat']:
+    for process_name in ['heartbeat', 'compute_subnet', 'local_polaris']:
         pid = read_pid(process_name)
         if not pid:
             console.print(f"[yellow]{process_name} is not running.[/yellow]")
@@ -265,7 +289,7 @@ def stop_polaris():
 
 def check_status():
     """Check if processes are running"""
-    processes = ['polaris', 'compute_subnet', 'heartbeat']
+    processes = ['local_polaris', 'compute_subnet', 'heartbeat']
     all_running = True
 
     for process_name in processes:

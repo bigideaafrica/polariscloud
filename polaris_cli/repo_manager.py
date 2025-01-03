@@ -13,7 +13,7 @@ from src.utils import get_project_root
 console = Console()
 
 REPO_URL = "https://github.com/bigideainc/polarise-compute-subnet"
-REPO_FOLDER_NAME = "compute_subnet"
+REPO_FOLDER_NAME = "x"
 
 def get_repo_path():
     """Get the path where the repository should be cloned."""

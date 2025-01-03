@@ -2,6 +2,8 @@ README.md
 setup.py
 polaris_cli/__init__.py
 polaris_cli/cli.py
+polaris_cli/heartbeat_monitor.py
+polaris_cli/heartbeat_service.py
 polaris_cli/log_monitor.py
 polaris_cli/network_handler.py
 polaris_cli/register.py
