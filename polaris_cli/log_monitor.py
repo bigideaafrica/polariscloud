@@ -268,7 +268,7 @@ def get_log_path():
     """Get path to the compute subnet stderr log file"""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     log_dir = os.path.join(project_root, 'logs')
-    return os.path.join(log_dir, 'compute_subnet_stderr.log')
+    return os.path.join(log_dir, 'polarise.log')
 
 def monitor_logs(process_pid=None):
     log_path = get_log_path()

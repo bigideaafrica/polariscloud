@@ -17,6 +17,7 @@ setup(
         'GitPython',
         'click-spinner',
         'rich',
+        'loguru',
         'inquirer',
         'requests',
         'xlsxwriter',

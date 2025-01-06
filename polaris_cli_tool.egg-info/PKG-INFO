@@ -14,6 +14,7 @@ Requires-Dist: tabulate
 Requires-Dist: GitPython
 Requires-Dist: click-spinner
 Requires-Dist: rich
+Requires-Dist: loguru
 Requires-Dist: inquirer
 Requires-Dist: requests
 Requires-Dist: xlsxwriter

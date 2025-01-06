@@ -9,6 +9,8 @@ polaris_cli/network_handler.py
 polaris_cli/register.py
 polaris_cli/repo_manager.py
 polaris_cli/start.py
+polaris_cli/val_start.py
+polaris_cli/validator_monitor.py
 polaris_cli/view_pod.py
 polaris_cli_tool.egg-info/PKG-INFO
 polaris_cli_tool.egg-info/SOURCES.txt

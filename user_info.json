@@ -1,9 +1,9 @@
 {
-    "miner_id": "MmWDOQ0Wb6QzrnQK4byt",
-    "username": "indiana",
+    "miner_id": "CHrhhlvlakc8GKOIRWbq",
+    "username": "jp_morgan",
     "network_info": {
-        "internal_ip": "192.168.244.33",
-        "ssh": "ssh://HP@0.tcp.in.ngrok.io:14384",
+        "internal_ip": "192.168.221.33",
+        "ssh": "ssh://HP@4.tcp.eu.ngrok.io:19773",
         "open_ports": [
             "22"
         ],
