@@ -1,4 +1,3 @@
-```markdown
 # Polaris CLI Tool - Heartbeat Service
 
 ## Table of Contents
