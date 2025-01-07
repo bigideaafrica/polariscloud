@@ -30,9 +30,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+server_url_ = os.getenv('SERVER_URL')
+
 class HeartbeatService:
     def __init__(self, 
-                 server_url: str = "https://orchestrator-gekh.onrender.com/api/v1",
+                 server_url: str = server_url_,
                  heartbeat_interval: int = 30):
         """Initialize HeartbeatService with configuration"""
         self.server_url = server_url.rstrip('/')

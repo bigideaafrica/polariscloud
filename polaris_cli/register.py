@@ -23,6 +23,7 @@ from src.utils import configure_logging
 
 logger = configure_logging()
 console = Console()
+server_url_ = os.getenv('SERVER_URL')
 
 def load_system_info(json_path='system_info.json') -> Dict[str, Any]:
     """Load system information from JSON file."""
@@ -93,7 +94,7 @@ def submit_registration(submission: Dict[str, Any]) -> Dict[str, Any]:
     """Submit registration to the API."""
     try:
         with spinner():
-            api_url = 'https://orchestrator-gekh.onrender.com/api/v1/miners/'
+            api_url = f'{server_url_}/miners/'
             headers = {'Content-Type': 'application/json'}
             response = requests.post(api_url, json=submission, headers=headers, timeout=10)
             response.raise_for_status()
