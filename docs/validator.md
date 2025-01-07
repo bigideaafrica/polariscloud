@@ -127,7 +127,7 @@ Example: python3 polaris_subnet/cli.py validator yominer 127.0.0.1 8000
 
 ```mermaid
 flowchart LR
-    Validator["Register to Subnet 33"] --> PolarisValidator["Select Registered Miners"]
+    Validator["Registered Validator"] --> PolarisValidator["Select Registered Miners"]
     PolarisValidator -->|Extract Compute Specs via SSH| Comparison["Compare Specs"]
     Comparison -->|Specs Match| Approval["Miner Verified"]
     Comparison -->|Specs Mismatch| Rejection["Miner Rejected"]
