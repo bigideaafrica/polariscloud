@@ -608,8 +608,7 @@ This project is licensed under the [MIT License](LICENSE).
 ## Author
 
 **Polaris Team**  
-Contact: [fred@polariscloud.ai](mailto:fred@polariscloud.ai)
-
+Hit us up on discord
 ---
 
 *For further assistance or inquiries, please reach out to the Polaris Team.*
