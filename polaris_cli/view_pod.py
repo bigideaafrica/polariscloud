@@ -16,6 +16,7 @@ from src.utils import configure_logging
 
 logger = configure_logging()
 console = Console()
+server_url_ = os.getenv('SERVER_URL')
 
 def fetch_pod_data(miner_id):
     """
@@ -24,7 +25,7 @@ def fetch_pod_data(miner_id):
     try:
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
             task = progress.add_task("Fetching pod data...", total=None)
-            api_url = f'https://orchestrator-gekh.onrender.com/api/v1/miners/{miner_id}'
+            api_url = f'{server_url_}/miners/{miner_id}'
             response = requests.get(api_url, timeout=10)
             response.raise_for_status()
             pod_data = response.json()

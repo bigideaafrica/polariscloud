@@ -1,5 +1,6 @@
 import json  # Added for JSON formatting in logs
 import logging
+import os
 import platform
 import sys
 from enum import Enum
@@ -34,13 +35,15 @@ else:
 console = Console()
 logger = logging.getLogger(__name__)
 
+server_url = os.getenv('SERVER_URL')
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,  # Set to DEBUG to capture all logs; adjust as needed
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("polaris_cli.log")  # Logs will be written to polaris_cli.log
+        logging.FileHandler("polaris_cli.log")  
     ]
 )
 
@@ -147,7 +150,7 @@ class NetworkSelectionHandler:
     def __init__(self):
         self.console = Console()
         self.api_test_url = 'http://localhost:8000/api/v1'
-        self.api_base_url = 'https://orchestrator-gekh.onrender.com/api/v1'
+        self.api_base_url = server_url
         self.created_miner_id = None
 
     def set_miner_id(self, miner_id: str):
@@ -442,6 +445,12 @@ Thank you for joining us! 🌟
                 task = progress.add_task(
                     "[cyan]Registering with Commune network...", total=100
                 )
+                
+                self.console.print(Panel(
+                    f"[green]Server Url: {api_url}[/green]",
+                    title="Server Url",
+                    border_style="green"
+                ))
 
                 response = requests.post(api_url, json=payload)
                 response.raise_for_status()

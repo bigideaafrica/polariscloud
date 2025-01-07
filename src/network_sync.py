@@ -1,6 +1,7 @@
 # src/network_sync.py
 
 import logging
+import os
 from typing import Dict
 
 import requests
@@ -8,10 +9,11 @@ import requests
 from src.network_format import convert_ssh_format
 
 logger = logging.getLogger(__name__)
+server_url_ = os.getenv('SERVER_URL')
 
 class NetworkSync:
     def __init__(self):
-        self.base_url = 'https://orchestrator-gekh.onrender.com/api/v1'
+        self.base_url = server_url_
         self.headers = {'Content-Type': 'application/json'}
         
     def update_miner_network(self, miner_id: str, network_info: Dict) -> bool:
