@@ -132,7 +132,7 @@ flowchart LR
     Comparison -->|Specs Match| Approval["Miner Verified"]
     Comparison -->|Specs Mismatch| Rejection["Miner Rejected"]
     
-    Validator["Validator"] -->|Select Registered Miners and Resources|Pending Payment Containers| Reward["Reward Calculation"]
+    Validator["Validator"] -->|Select Registered Miners and Resources| Pending Payment Containers| Reward["Reward Calculation"]
     Reward -->|Compute Weights + Active Time| Payment["Tokens Awarded"]
 ```
 
