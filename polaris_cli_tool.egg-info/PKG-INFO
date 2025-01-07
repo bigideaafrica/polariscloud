@@ -11,8 +11,10 @@ Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Requires-Dist: click
 Requires-Dist: tabulate
+Requires-Dist: GitPython
 Requires-Dist: click-spinner
 Requires-Dist: rich
+Requires-Dist: loguru
 Requires-Dist: inquirer
 Requires-Dist: requests
 Requires-Dist: xlsxwriter

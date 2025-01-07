@@ -1,4 +1,5 @@
-# Polaris Subnet Docs
+```markdown
+# Polaris CLI Tool
 
 A modern development workspace manager for distributed compute resources. Polaris simplifies managing compute resources, monitoring their status, and automating key tasks in a distributed environment.
 
@@ -32,7 +33,7 @@ Ensure you have **Python 3.6** or higher installed. Then, install the required d
 pip install -r requirements.txt
 ```
 
-Install Polaris in editable mode:
+Alternatively, you can install Polaris in editable mode:
 
 ```bash
 pip install -e .
@@ -57,7 +58,7 @@ Check that Polaris is installed correctly by running:
 polaris --help
 ```
 
-You should see the following output:
+You should see output similar to:
 
 ```
 Usage: polaris [OPTIONS] COMMAND [ARGS]...
@@ -80,112 +81,321 @@ Commands:
 
 ---
 
-## Usage Guide
+## Prerequisites
 
-Below are detailed instructions and example outputs for each command supported by Polaris.
+Before running `polaris start`, ensure you have the following prerequisites configured:
+
+### 1. Docker Installed and Running
+
+**Installation:**
+- Visit [Docker's official site](https://docs.docker.com/get-docker/) for installation instructions tailored to your operating system.
+
+**Running Docker:**
+- **Verify Installation:**
+  ```bash
+  docker --version
+  ```
+  **Expected Output:**
+  ```
+  Docker version 20.10.7, build f0df350
+  ```
+- **Check Docker Status:**
+  ```bash
+  docker info
+  ```
+  **Expected Output:**
+  ```
+  Client:
+   Debug Mode: false
+
+  Server:
+   Containers: 5
+   Running: 2
+   Paused: 0
+   Stopped: 3
+   ...
+  ```
+- **Start Docker Manually (if not running):**
+  - **Windows/Mac:** Launch Docker Desktop from your applications menu.
+  - **Linux:** Start Docker service using your system's service manager, e.g.,
+    ```bash
+    sudo systemctl start docker
+    ```
+
+### 2. ngrok Running
+
+**Installation:**
+- Download and install ngrok from [ngrok's website](https://ngrok.com/download).
+
+**Setup and Running a Tunnel:**
+- **Basic Tunnel (No Authentication Required):**
+  ```bash
+  ngrok tcp 22
+  ```
+  **Sample Output:**
+  ```
+  Session Status                online
+  Account                       Example User (Plan: Free)
+  Version                       2.3.40
+  Region                        United States (us)
+  Web Interface                 http://127.0.0.1:4040
+  Forwarding                    tcp://0.tcp.ngrok.io:12345 -> localhost:22
+  ```
+  - **Explanation:**
+    - `Forwarding` provides a public URL (`tcp://0.tcp.ngrok.io:12345`) that tunnels to your local SSH service (`localhost:22`).
+
+### 3. SSH Service Running
+
+**Check SSH Status:**
+- **Linux:**
+  ```bash
+  sudo systemctl status ssh
+  ```
+  **Expected Output:**
+  ```
+  ● ssh.service - OpenBSD Secure Shell server
+     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; vendor preset: enabled)
+     Active: active (running) since Tue 2025-01-07 05:03:14 UTC; 1h 30min ago
+     ...
+  ```
+- **Windows:**
+  - **Enable OpenSSH Server:**
+    1. Go to **Settings** > **Apps** > **Optional Features**.
+    2. Click **Add a feature**.
+    3. Find and install **OpenSSH Server**.
+  - **Start SSH Service:**
+    ```powershell
+    Start-Service sshd
+    ```
+  - **Set SSH to Start Automatically:**
+    ```powershell
+    Set-Service -Name sshd -StartupType 'Automatic'
+    ```
+
+**Start SSH if Needed:**
+- **Linux:**
+  ```bash
+  sudo systemctl start ssh
+  ```
+- **Windows:**
+  ```powershell
+  Start-Service sshd
+  ```
+
+**Verify SSH Configuration:**
+- **Linux:** Check `/etc/ssh/sshd_config` for correct settings.
+- **Windows:** Ensure OpenSSH Server is properly configured via **Settings** or configuration files.
+
+---
+
+## Usage Guide
 
 ### **Start the Polaris Service**
 
-Start Polaris and its associated Compute Subnet:
+After ensuring all prerequisites are met, start Polaris with:
 
 ```bash
 polaris start
 ```
 
-**Example Output:**
+**Example Interaction:**
 
 ```
 Starting Polaris...
-polaris started successfully with PID 11234.
-compute_subnet started successfully with PID 56789.
+Please select the type of node you want to run:
+1. Miner Node
+2. Validator Node
+Enter choice [1-2]: 1
+
+Starting Miner Node...
+polaris started successfully with PID 12345.
+compute_subnet started successfully with PID 67890.
 Logs: stdout -> logs/polaris_stdout.log, stderr -> logs/polaris_stderr.log
 ```
 
-**Note:**
-```
-After running polaris start, a number of terminals will be launched indicating ngrok start process after ngrouk is fully launched the terminals can be closed
-```
+*Note:* Selecting "2" for Validator Node will initiate validator-specific services.
 
 ---
 
 ### **Register a New Miner**
 
-Register a miner to manage compute resources. The registration process includes several key steps and network options:
+To register as a new miner, run:
 
 ```bash
 polaris register
 ```
 
-**Registration Process:**
+#### Registration Process:
 
 1. **System Information Check**
-   - Automatically loads and validates your system's compute resources
-   - Displays detailed information including:
-     - Location
-     - Resource IDs
-     - RAM configurations
-     - Storage details (type, capacity, read/write speeds)
-     - CPU specifications
-     - Network configuration
 
-2. **Network Selection**
-   You can choose between different network types:
-   - **Bittensor Network**: For distributed AI training
-   - **Commune Network**: For decentralized compute resources
-   - **Standard Registration**: Default compute network
+   Upon running the registration command, Polaris will load and validate your system's compute resources. You will see detailed information similar to the following:
 
-3. **Registration Options**
-   - **Username**: Set your desired username for the network
-   - **Network-Specific Settings**:
-     - For Bittensor: Additional blockchain configurations
-     - For Commune: Wallet name and UID setup
-   - **SSH Configuration**: Automatic setup of secure connections
+   ```
+   System Information
+   ------------------
+   Location: Example City, Example Country
+   Compute Resources:
+     - ID: ABCD1234-EFGH-5678-IJKL-9012MNOP3456
+     - Resource Type: CPU
+     - RAM: 32GB
+     - Storage: SSD, 1TB, Read Speed: 550MB/s, Write Speed: 520MB/s
+     - CPU Specs: Example CPU Model, 8 Cores, 3.2GHz
+     - Network: Internal IP - 192.168.1.100, SSH - ssh://user@0.tcp.ngrok.io:12345
+   ```
 
-**Example Interaction:**
+2. **User Verification**
 
-```
-System Information
-------------------
-location: Nairobi, Kenya
-compute_resources[0].id: 123e4567-e89b-12d3-a456-426614174000
-compute_resources[0].ram: 32GB
-compute_resources[0].storage.type: SSD
-compute_resources[0].storage.capacity: 1TB
-compute_resources[0].cpu_specs.cpu_name: Intel Xeon
-compute_resources[0].network.internal_ip: 192.168.1.100
+   After displaying system information, Polaris will prompt you to verify and proceed with the registration:
 
-Do you want to proceed with this registration? [y/n]: y
+   ```
+   Do you want to proceed with this registration? [y/n]: y
+   ```
 
-Select Network Type:
-1. Bittensor Network
-2. Commune Network
-3. Standard Registration
-Enter choice [1-3]: 2
+3. **Username and Wallet Setup**
 
-Enter your desired username: user123
+   - **Enter Desired Username:**
 
-Commune Network Setup:
-- Creating wallet...
-- Generating UID...
-- Configuring network settings...
+     ```
+     Enter your desired username (): sampleuser
+     ```
 
-Registration Complete
----------------------
-Miner ID: MXN12345abcdef67890
-Added Resources: CPU, GPU
-Network: Commune
-Wallet Name: commune_wallet_123
-Commune UID: CID_987654321
+   - **Commune Wallet Registration Prompt:**
 
-Important: Save your Miner ID - you'll need it to manage your compute resources.
-```
+     Before entering your Commune wallet name, ensure that your wallet key is registered under our Polaris subnet on Commune. If you don’t have a registered Commune miner wallet, follow the instructions below to create and register one.
 
-**Validation Checks:**
-- Validates system information format
-- Verifies compute resource specifications
-- Confirms network connectivity
-- Ensures SSH configuration is correct
-- Validates RAM format and storage configurations
+     **Sample Prompt:**
+
+     ```
+     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔒 Commune Miner Registration ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     ┃                                                                                            ┃
+     ┃   You are about to register as a POLARIS COMMUNE MINER                                     ┃
+     ┃                                                                                            ┃
+     ┃   This will:                                                                               ┃
+     ┃   • Connect you to our Polaris Commune Network                                             ┃
+     ┃   • Enable you to earn rewards                                                             ┃
+     ┃   • Join the decentralized compute ecosystem                                               ┃
+     ┃                                                                                            ┃
+     ┃   ────────────────────────────────────                                                     ┃
+     ┃                                                                                            ┃
+     ┃   Requirements:                                                                            ┃
+     ┃   • Must have registered Commune key                                                       ┃
+     ┃   • Key must be registered under our Polaris subnet on Commune                             ┃
+     ┃                                                                                            ┃
+     ┃   If you don't have a registered Commune miner wallet, follow instructions below:          ┃
+     ┃   • [Commune Keys Documentation](https://communeai.org/docs/working-with-keys/key-basics)    ┃
+     ┃   • [Polaris Subnet Registration Instructions](https://github.com/bigideainc/polaris-subnet) ┃
+     ┃                                                                                            ┃
+     ┃   Please enter your Commune wallet name below                                              ┃
+     ┃                                                                                            ┃
+     ┃   Note: This wallet must be registered under Polaris miner subnet (NetUID 33) on Commune    ┃
+     ┃                                                                                            ┃
+     ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+     ```
+
+     ```
+     Enter your Commune wallet name: sample_wallet
+     ```
+
+4. **Creating and Registering Your Commune Wallet for Miner Registration**
+
+   **Step-by-Step Instructions:**
+
+   1. **Install CommuneX:**
+
+      Install the CommuneX package, a tool for interacting with the Commune network:
+
+      ```bash
+      pip install communex
+      ```
+
+   2. **Create a Wallet (Burns 10 COMAI Tokens):**
+
+      Before creating a new wallet, **ensure that your Commune account has at least 10 COMAI tokens**. This is necessary because creating a wallet will burn 10 COMAI tokens on the Commune network as part of the key creation process.
+
+      Forge a new wallet for your mining ventures:
+
+      ```bash
+      comx key create sample_wallet
+      ```
+
+      **Sample Output:**
+
+      ```
+      Creating new Commune wallet 'sample_wallet'...
+      Wallet 'sample_wallet' created successfully.
+      Note: 10 COMAI tokens have been burned for wallet creation.
+      ```
+
+   3. **Register on Polaris Compute Subnet (NetUID 33) as a Miner:**
+
+      After creating your wallet, register it under the Polaris subnet.
+
+      ```bash
+      comx module register miner sample_wallet 33
+      ```
+
+      **Sample Output:**
+
+      ```
+      Registering wallet 'sample_wallet' on Polaris Compute Subnet (NetUID 33)...
+      Verification of COMAI tokens...
+      Registration successful.
+      Your wallet 'sample_wallet' is now registered under Polaris Compute Subnet.
+      ```
+
+5. **Complete Miner Registration:**
+
+   - **Enter Commune Wallet Name:**
+
+     After successfully registering your Commune wallet, return to the Polaris registration process. Enter your Commune wallet name when prompted:
+
+     ```
+     Enter your Commune wallet name: sample_wallet
+     ```
+
+   - **System Retrieves Commune UID:**
+
+     ```
+     Retrieving Commune UID...
+     2025-01-07 05:03:14,224 [INFO] Retrieved miner UID: 2 for wallet: sample_wallet
+     ```
+
+   - **Registration Confirmation:**
+
+     ```
+     Registration Complete
+     ---------------------
+     Miner ID: MINERID1234567890
+     Added Resources: CPU
+     Network: Commune
+     Wallet Name: sample_wallet
+     Commune UID: CID_SAMPLE123
+
+     Important: Save your Miner ID - you'll need it to manage your compute resources.
+     ```
+
+6. **Validation Checks:**
+
+   Throughout the registration process, Polaris performs several validation checks to ensure everything is configured correctly:
+
+   - **System Information Format:** Ensures all system details are correctly formatted and complete.
+   - **Compute Resource Specifications:** Verifies that your compute resources meet the required specifications.
+   - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via ngrok and SSH.
+   - **SSH Configuration:** Checks that SSH is correctly configured and accessible.
+   - **User Inputs:** Validates the accuracy and format of the entered username and Commune wallet name.
+
+   **Sample Validation Output:**
+
+   ```
+   Running validation checks...
+   ✔ System Information: Valid
+   ✔ Compute Resources: Sufficient specifications
+   ✔ Network Connectivity: Connected via ngrok
+   ✔ SSH Configuration: Active and accessible
+   ✔ User Inputs: Username and wallet name validated
+   All validation checks passed successfully.
+   ```
 
 ---
 
@@ -202,17 +412,17 @@ polaris view-compute
 ```
 Pod Details
 -----------
-ID: MXN12345abcdef67890
+ID: MINERID1234567890
 Name: Polaris Compute Pod
-Location: Nairobi, Kenya
+Location: Example City, Example Country
 Description: Distributed compute node
 
 Compute Resources
 -----------------
-ID         Type  Location       Price/Hr  RAM    Storage      Specs
----------- ----- -------------- --------- ------ ----------- ----------------------------------
-321abc     CPU   Nairobi, Kenya $0.10/hr  32GB   SSD 1TB     16 Cores, 3.8GHz
-654xyz     GPU   Nairobi, Kenya $0.20/hr  16GB   SSD 512GB   NVIDIA Tesla V100, 5000 CUDA Cores
+ID           Type  Location             Price/Hr  RAM    Storage      Specs
+------------ ----- -------------------- --------- ------ ----------- ----------------------------------
+CPU123456    CPU   Example City, Country $0.10/hr  32GB   SSD 1TB     8 Cores, 3.2GHz
+GPU789012    GPU   Example City, Country $0.20/hr  16GB   SSD 512GB   NVIDIA Tesla V100, 5000 CUDA Cores
 ```
 
 ---
@@ -228,8 +438,8 @@ polaris status
 **Example Output:**
 
 ```
-polaris is running with PID 11234.
-compute_subnet is running with PID 56789.
+polaris is running with PID 12345.
+compute_subnet is running with PID 67890.
 ```
 
 ---
@@ -264,8 +474,8 @@ polaris logs
 **Example Output:**
 
 ```
-[INFO] 2024-12-31 10:00:00: Polaris service started.
-[INFO] 2024-12-31 10:05:00: New miner registered with ID MXN12345abcdef67890.
+[INFO] 2025-01-07 05:00:00: Polaris service started.
+[INFO] 2025-01-07 05:05:00: New miner registered with ID MINERID1234567890.
 ```
 
 ---
@@ -298,7 +508,7 @@ polaris check-main
 **Example Output:**
 
 ```
-Main process is running with PID 11234.
+Main process is running with PID 12345.
 Logs: logs/main_stdout.log, logs/main_stderr.log
 ```
 
@@ -330,6 +540,7 @@ flowchart TB
 ### Core Components
 
 #### HeartbeatStore
+
 Manages in-memory state tracking of miner heartbeats and orchestrates periodic health checks:
 
 ```python
@@ -383,14 +594,24 @@ For complete technical documentation, including API endpoints, data models, erro
 
 - **Python:** Version 3.6 or higher.
 - **Operating Systems:** Compatible with Windows, Linux, and macOS.
+- **Docker:** Installed and running.
+- **ngrok:** Installed and running to create secure tunnels.
+- **SSH Service:** Active and properly configured on your machine.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
 ## Author
 
 **Polaris Team**  
-Commune Discord : Channel 33
+Contact: [fred@polariscloud.ai](mailto:fred@polariscloud.ai)
 
 ---
 
 *For further assistance or inquiries, please reach out to the Polaris Team.*
+```

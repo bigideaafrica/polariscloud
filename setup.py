@@ -14,8 +14,10 @@ setup(
     install_requires=[
         'click',
         'tabulate',
+        'GitPython',
         'click-spinner',
         'rich',
+        'loguru',
         'inquirer',
         'requests',
         'xlsxwriter',
