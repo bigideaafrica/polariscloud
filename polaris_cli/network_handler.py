@@ -1,5 +1,6 @@
 import json  # Added for JSON formatting in logs
 import logging
+import os
 import platform
 import sys
 from enum import Enum
@@ -34,13 +35,15 @@ else:
 console = Console()
 logger = logging.getLogger(__name__)
 
+server_url = os.getenv('SERVER_URL')
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,  # Set to DEBUG to capture all logs; adjust as needed
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("polaris_cli.log")  # Logs will be written to polaris_cli.log
+        logging.FileHandler("polaris_cli.log")  
     ]
 )
 
@@ -147,7 +150,7 @@ class NetworkSelectionHandler:
     def __init__(self):
         self.console = Console()
         self.api_test_url = 'http://localhost:8000/api/v1'
-        self.api_base_url = 'https://orchestrator-gekh.onrender.com/api/v1'
+        self.api_base_url = server_url
         self.created_miner_id = None
 
     def set_miner_id(self, miner_id: str):
@@ -316,29 +319,49 @@ class NetworkSelectionHandler:
             ))
             logger.error(f"Error during Commune registration: {e}")
             sys.exit(1)
-
-    def _get_commune_uid(self, wallet_name, netuid=13):
-        """Retrieve Commune UID for the given wallet.
-
-        This is a dummy implementation that returns a random UID for testing purposes.
-
-        Args:
-            wallet_name (str): Name of the wallet
-            netuid (int): Network UID (default: 13)
-
-        Returns:
-            int: A random miner UID between 0 and 255
-        """
+            
+    def _get_commune_uid(self, wallet_name, netuid=33):
+        """Retrieve Commune UID for the given wallet."""
         try:
-            import random
-
-            # Generate a random UID between 0 and 255 (typical range for subnet UIDs)
-            random_uid = random.randint(0, 255)
-            logger.info(f"Retrieved random miner UID: {random_uid} for wallet: {wallet_name}")
-            return random_uid
+            key = classic_load_key(wallet_name)
+            commune_node_url = "wss://api.communeai.net/"
+            client = CommuneClient(commune_node_url)
+            modules_keys = client.query_map_key(netuid)
+            val_ss58 = key.ss58_address
+            miner_uid = next(uid for uid, address in modules_keys.items() 
+                           if address == val_ss58)
+            logger.info(f"Retrieved miner UID: {miner_uid} for wallet: {wallet_name}")
+            return miner_uid
+            
+        except StopIteration:
+            logger.error("Miner's SS58 address not found in the network.")
+            return None
         except Exception as e:
             logger.error(f"Error retrieving miner UID: {e}")
             return None
+
+    # def _get_commune_uid(self, wallet_name, netuid=33):
+    #     """Retrieve Commune UID for the given wallet.
+
+    #     This is a dummy implementation that returns a random UID for testing purposes.
+
+    #     Args:
+    #         wallet_name (str): Name of the wallet
+    #         netuid (int): Network UID (default: 13)
+
+    #     Returns:
+    #         int: A random miner UID between 0 and 255
+    #     """
+    #     try:
+    #         import random
+
+    #         # Generate a random UID between 0 and 255 (typical range for subnet UIDs)
+    #         random_uid = random.randint(0, 255)
+    #         logger.info(f"Retrieved random miner UID: {random_uid} for wallet: {wallet_name}")
+    #         return random_uid
+    #     except Exception as e:
+    #         logger.error(f"Error retrieving miner UID: {e}")
+    #         return None
 
     def get_created_miner_id(self) -> str:
         """Get the miner ID that was created during the compute registration process."""
@@ -395,7 +418,7 @@ Thank you for joining us! 🌟
         """Register miner with Commune network."""
         try:
             miner_id = self.get_created_miner_id()
-            api_url = f'{self.api_test_url}/commune/register'
+            api_url = f'{self.api_base_url}/commune/register'
 
             payload = {
                 'miner_id': miner_id,
@@ -422,6 +445,12 @@ Thank you for joining us! 🌟
                 task = progress.add_task(
                     "[cyan]Registering with Commune network...", total=100
                 )
+                
+                self.console.print(Panel(
+                    f"[green]Server Url: {api_url}[/green]",
+                    title="Server Url",
+                    border_style="green"
+                ))
 
                 response = requests.post(api_url, json=payload)
                 response.raise_for_status()
@@ -479,7 +508,7 @@ Thank you for joining us! 🌟
     def verify_commune_status(self, miner_id: str):
         """Verify Commune registration status."""
         try:
-            api_url = f'{self.api_test_url}/commune/miner/{miner_id}/verify'
+            api_url = f'{self.api_base_url}/commune/miner/{miner_id}/verify'
 
             # Log the verification URL
             logger.debug(f"Verifying Commune status with URL: {api_url}")
@@ -509,7 +538,7 @@ Thank you for joining us! 🌟
                         Text("✅ Verification Complete!", style="bold green"),
                         Text(""),
                         Text(
-                            f"Status: {result.get('miner_status', 'Unknown')}", style="cyan"),
+                            f"Validation Status: {result.get('miner_status', 'Unknown')}", style="cyan"),
                         Text(
                             f"Commune UID: {result.get('commune_uid', 'Unknown')}", style="cyan"),
                         Text(
