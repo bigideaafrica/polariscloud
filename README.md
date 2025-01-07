@@ -599,12 +599,6 @@ For complete technical documentation, including API endpoints, data models, erro
 
 ---
 
-## License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
 ## Author
 
 **Polaris Team**  
