@@ -185,6 +185,75 @@ Before running `polaris start`, ensure you have the following prerequisites conf
 - **Linux:** Check `/etc/ssh/sshd_config` for correct settings.
 - **Windows:** Ensure OpenSSH Server is properly configured via **Settings** or configuration files.
 
+### 4. Public IP Address for Your Compute Node
+
+**Objective:**  
+Ensure your compute node has a public IP address or is directly accessible from the internet. This allows other nodes and services to connect to your machine without intermediary tunneling solutions.
+
+**Steps to Make Your Compute IP Public:**
+
+#### A. Verify Your Current Public IP
+
+1. **Check Public IP:**
+   - Open a terminal on your compute node and run:
+     ```bash
+     curl ifconfig.me
+     ```
+     or
+     ```bash
+     curl ipinfo.io/ip
+     ```
+   - The returned IP should be a public IP. If it shows a private IP (e.g., 192.168.x.x, 10.x.x.x, or 172.16.x.x to 172.31.x.x), then your machine is behind a NAT and does not have a direct public IP.
+
+#### B. Configuring Public IP Access
+
+If your machine does not have a public IP, follow one of these approaches to expose it:
+
+1. **Direct Public IP from ISP:**
+   - **Request a Public IP:** Contact your Internet Service Provider (ISP) to request a static or dynamic public IP assignment for your machine.
+   - **Configure Network Interface:** 
+     - If given a static IP, configure your network interface with the provided IP, subnet mask, gateway, and DNS settings.
+     - On Linux, for example, you might update your network configuration file or use `nmcli`/`ifconfig` depending on your distribution.
+
+2. **Port Forwarding Through a Router:**
+   - **Access Router Settings:**
+     - Log into your router’s administration panel (usually accessed via a web browser at an address like `192.168.1.1`).
+   - **Configure Port Forwarding:**
+     1. Locate the port forwarding section.
+     2. Add a new port forwarding rule to forward external traffic to your compute node’s internal IP:
+        - **External Port:** e.g., 22 for SSH or a custom port as required by Polaris.
+        - **Internal IP Address:** The local IP of your compute node.
+        - **Internal Port:** The port on which your service is running (e.g., 22 for SSH).
+   - **Save and Apply:** Save changes and restart the router if necessary.
+   - **Determine Your Public IP:** Find your router's public IP by checking the router status page or using a service like [WhatIsMyIP.com](https://www.whatismyip.com/).
+
+3. **Dynamic DNS (if you have a dynamic public IP):**
+   - **Set Up Dynamic DNS:** If your ISP assigns a dynamic public IP, use a Dynamic DNS service (like No-IP, DynDNS, etc.) to associate a domain name with your changing IP.
+   - **Configure Your Router or Client:**
+     - Many routers support Dynamic DNS configuration directly. Input your Dynamic DNS credentials into the router’s DDNS settings.
+     - Alternatively, run a Dynamic DNS client on your compute node to update the DNS record whenever your IP changes.
+
+#### C. Verify Public Accessibility
+
+Once configured, verify that your compute node is accessible from the internet:
+
+- **Test SSH Connection:**
+  ```bash
+  ssh user@your_public_ip_or_ddns_domain -p <forwarded_port>
+  ```
+  Replace `your_public_ip_or_ddns_domain` with your public IP or Dynamic DNS domain and `<forwarded_port>` with the forwarded port number (commonly 22 for SSH).
+
+- **Check Port Status:**
+  Use an online port checking service like [CanYouSeeMe.org](https://canyouseeme.org/) to confirm the relevant port is open and reachable.
+
+**Security Considerations:**
+
+- **Firewall Rules:**  
+  Ensure your firewall (both on the compute node and network level) allows incoming connections on the necessary ports, but also restricts access to trusted IPs when possible.
+
+- **Strong Authentication:**  
+  Use strong passwords, SSH keys, or other authentication methods to secure direct access to your compute node.
+
 ---
 
 ## Usage Guide
@@ -596,14 +665,16 @@ For complete technical documentation, including API endpoints, data models, erro
 - **Docker:** Installed and running.
 - **ngrok:** Installed and running to create secure tunnels.
 - **SSH Service:** Active and properly configured on your machine.
+- **Public IP:** Your compute node should be publicly accessible, either via a direct public IP or properly configured port forwarding.
 
 ---
 
 ## Author
 
 **Polaris Team**  
-Hit us up on discord
+Hit us up on Discord: [compute-33](https://discord.com/channels/941362322000203776/1324582017513422870)
+
 ---
 
 *For further assistance or inquiries, please reach out to the Polaris Team.*
-```
+``` 
