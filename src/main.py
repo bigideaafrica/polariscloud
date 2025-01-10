@@ -1,4 +1,3 @@
-import ctypes
 import json
 import logging
 import os
@@ -6,7 +5,7 @@ import signal
 import subprocess
 import sys
 import time
-
+import platform
 import requests
 
 from src.ngrok_manager import NgrokManager
@@ -20,33 +19,51 @@ from src.utils import configure_logging, get_local_ip, get_project_root
 logger = configure_logging()
 
 def is_admin():
-    """Check if the script is running with administrative privileges on Windows."""
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except AttributeError:
-        return False
+    """Check if the script is running with administrative privileges."""
+    if platform.system().lower() == 'windows':
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except AttributeError:
+            return False
+    else:
+        # For Linux/Unix systems
+        return os.geteuid() == 0
 
 def run_as_admin():
     """
-    Relaunch the current script with administrative privileges on Windows.
+    Relaunch the current script with administrative privileges.
     """
-    try:
-        script_path = os.path.abspath(__file__)
-        params = f'"{script_path}"'
-        
-        ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            sys.executable,
-            params,
-            None,
-            1
-        )
-        logger.info("Script relaunched with administrative privileges.")
+    if platform.system().lower() == 'windows':
+        try:
+            script_path = os.path.abspath(__file__)
+            params = f'"{script_path}"'
+            
+            import ctypes
+            ctypes.windll.shell32.ShellExecuteW(
+                None,
+                "runas",
+                sys.executable,
+                params,
+                None,
+                1
+            )
+            logger.info("Script relaunched with administrative privileges.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to get admin rights: {e}")
+            return False
+    else:
+        # For Linux/Unix systems
+        if os.geteuid() != 0:
+            logger.info("Restarting with sudo...")
+            try:
+                args = ['sudo', sys.executable] + sys.argv
+                os.execvp('sudo', args)
+            except Exception as e:
+                logger.exception(f"Failed to restart with sudo: {e}")
+                return False
         return True
-    except Exception as e:
-        logger.exception(f"Failed to get admin rights: {e}")
-        return False
 
 def create_ssh_directory_windows():
     """Create SSH directory on Windows with administrative privileges."""
@@ -77,6 +94,37 @@ def create_ssh_directory_windows():
         return True
     except Exception as e:
         logger.error(f"Failed to create SSH directory: {e}")
+        return False
+
+def configure_ssh():
+    """Configure SSH server for the current platform."""
+    if platform.system().lower() == 'windows':
+        return configure_ssh_windows()
+    else:
+        return configure_ssh_linux()
+
+def configure_ssh_linux():
+    """Configure SSH server on Linux."""
+    try:
+        # Check if SSH server is installed
+        result = subprocess.run(['systemctl', 'status', 'ssh'], capture_output=True, text=True)
+        if result.returncode != 0:
+            # Install SSH server if not present
+            logger.info("Installing SSH server...")
+            subprocess.run(['apt-get', 'update'], check=True)
+            subprocess.run(['apt-get', 'install', '-y', 'openssh-server'], check=True)
+        
+        # Start and enable SSH service
+        subprocess.run(['systemctl', 'start', 'ssh'], check=True)
+        subprocess.run(['systemctl', 'enable', 'ssh'], check=True)
+        
+        logger.info("SSH server configured successfully on Linux.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to configure SSH server on Linux: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error configuring SSH server: {e}")
         return False
 
 def configure_ssh_windows():
@@ -112,44 +160,58 @@ def configure_ssh_windows():
         logger.error("SSH server configuration failed.")
         return False
 
-def run_as_admin_command(command):
-    """Run a command with administrative privileges."""
+def setup_firewall():
+    """Configure firewall based on platform."""
+    if platform.system().lower() == 'windows':
+        return setup_firewall_windows()
+    else:
+        return setup_firewall_linux()
+
+def setup_firewall_linux():
+    """Configure Linux firewall (ufw) to allow SSH connections."""
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            shell=True
-        )
-        
+        # Check if ufw is installed
+        result = subprocess.run(['which', 'ufw'], capture_output=True)
         if result.returncode != 0:
-            logger.error(f"Command '{' '.join(command)}' failed with error: {result.stderr.strip()}")
-            return False
+            logger.info("Installing ufw...")
+            subprocess.run(['apt-get', 'update'], check=True)
+            subprocess.run(['apt-get', 'install', '-y', 'ufw'], check=True)
         
-        logger.debug(f"Command '{' '.join(command)}' executed successfully.")
+        # Configure ufw
+        subprocess.run(['ufw', 'allow', 'ssh'], check=True)
+        subprocess.run(['ufw', '--force', 'enable'], check=True)
+        
+        logger.info("Linux firewall configured to allow SSH connections.")
         return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure Linux firewall: {e}")
+        return False
     except Exception as e:
-        logger.exception(f"Error running command '{' '.join(command)}': {e}")
+        logger.warning(f"Error configuring firewall: {e}")
         return False
 
 def setup_firewall_windows():
     """Configure Windows Firewall to allow SSH connections."""
     firewall_cmd = 'netsh advfirewall firewall add rule name="OpenSSH" dir=in action=allow protocol=TCP localport=22'
-    if run_as_admin_command(firewall_cmd.split()):
+    try:
+        subprocess.run(firewall_cmd, shell=True, check=True, capture_output=True)
         logger.info("Windows Firewall configured to allow SSH connections on port 22.")
         return True
-    else:
-        logger.warning("Failed to configure Windows Firewall for SSH. SSH access might be blocked.")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure Windows Firewall: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Error configuring firewall: {e}")
         return False
 
 def format_network_info(username: str, password: str, host: str, port: int) -> dict:
     """Format network information according to API requirements."""
     return {
-        "internal_ip": str(get_local_ip()),  # Ensure string type
+        "internal_ip": str(get_local_ip()),
         "ssh": f"ssh://{username}@{host}:{port}",
-        "open_ports": ["22"],  # Always a list of strings
+        "open_ports": ["22"],
         "password": str(password),
-        "username": str(username)  # Ensure string type
+        "username": str(username)
     }
 
 def save_and_sync_info(system_info, filename='system_info.json'):
@@ -187,6 +249,7 @@ def save_and_sync_info(system_info, filename='system_info.json'):
         return None
 
 def handle_shutdown(signum, frame):
+    """Handle shutdown signals gracefully."""
     logger.info("Received shutdown signal. Cleaning up...")
     sys.exit(0)
 
@@ -214,13 +277,13 @@ def main():
     
     ngrok = None
     try:
-        # Configure SSH
-        if not configure_ssh_windows():
-            logger.error("Failed to configure SSH on Windows.")
+        # Configure SSH based on platform
+        if not configure_ssh():
+            logger.error("Failed to configure SSH.")
             sys.exit(1)
         
-        # Setup firewall
-        if not setup_firewall_windows():
+        # Setup firewall based on platform
+        if not setup_firewall():
             logger.warning("Could not configure firewall. SSH access might be blocked.")
         
         while True:
