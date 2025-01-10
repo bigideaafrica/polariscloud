@@ -2,6 +2,7 @@ pyyaml
 requests
 psutil
 rich
+httpx
 loguru
 GitPython
 questionary
