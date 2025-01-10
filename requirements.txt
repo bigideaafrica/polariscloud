@@ -1,6 +1,7 @@
 pyyaml
 requests
 psutil
+rich
 loguru
 GitPython
 questionary
