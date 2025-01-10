@@ -56,45 +56,43 @@ def run_as_admin():
     else:
         # For Linux/Unix systems
         if os.geteuid() != 0:
-            logger.info("Restarting with sudo...")
             try:
-                args = ['sudo', sys.executable] + sys.argv
-                os.execvp('sudo', args)
+                # Read password from .env file
+                env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+                if os.path.exists(env_path):
+                    with open(env_path, 'r') as f:
+                        for line in f:
+                            if line.startswith('SSH_PASSWORD='):
+                                password = line.split('=')[1].strip()
+                                logger.info("Restarting with sudo using password from .env...")
+                                
+                                # Construct the sudo command
+                                cmd = ['sudo', '-S'] + [sys.executable] + sys.argv
+                                
+                                # Use subprocess to pipe the password
+                                process = subprocess.Popen(
+                                    cmd,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    universal_newlines=True
+                                )
+                                
+                                # Send password to stdin
+                                stdout, stderr = process.communicate(input=password + '\n')
+                                
+                                if process.returncode != 0:
+                                    logger.error(f"Sudo failed: {stderr}")
+                                    return False
+                                return True
+                
+                logger.error("No .env file found or SSH_PASSWORD not set")
+                return False
+                
             except Exception as e:
                 logger.exception(f"Failed to restart with sudo: {e}")
                 return False
         return True
-
-def create_ssh_directory_windows():
-    """Create SSH directory on Windows with administrative privileges."""
-    ssh_dir = r'C:\ProgramData\ssh'
-    
-    # Try using PowerShell commands first
-    try:
-        ps_command = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{ssh_dir}\'"'
-        subprocess.run(ps_command, check=True, shell=True, capture_output=True)
-        logger.info(f"SSH directory created at {ssh_dir} using PowerShell")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"PowerShell directory creation failed: {e}")
-    
-    # Try using cmd.exe as fallback
-    try:
-        cmd_command = f'cmd /c mkdir "{ssh_dir}" 2>nul'
-        subprocess.run(cmd_command, check=True, shell=True, capture_output=True)
-        logger.info(f"SSH directory created at {ssh_dir} using cmd")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"CMD directory creation failed: {e}")
-    
-    # Try using os.makedirs as final fallback
-    try:
-        os.makedirs(ssh_dir, exist_ok=True)
-        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to create SSH directory: {e}")
-        return False
 
 def configure_ssh():
     """Configure SSH server for the current platform."""
@@ -160,6 +158,37 @@ def configure_ssh_windows():
         logger.error("SSH server configuration failed.")
         return False
 
+def create_ssh_directory_windows():
+    """Create SSH directory on Windows with administrative privileges."""
+    ssh_dir = r'C:\ProgramData\ssh'
+    
+    # Try using PowerShell commands first
+    try:
+        ps_command = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{ssh_dir}\'"'
+        subprocess.run(ps_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using PowerShell")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"PowerShell directory creation failed: {e}")
+    
+    # Try using cmd.exe as fallback
+    try:
+        cmd_command = f'cmd /c mkdir "{ssh_dir}" 2>nul'
+        subprocess.run(cmd_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using cmd")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"CMD directory creation failed: {e}")
+    
+    # Try using os.makedirs as final fallback
+    try:
+        os.makedirs(ssh_dir, exist_ok=True)
+        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to create SSH directory: {e}")
+        return False
+
 def setup_firewall():
     """Configure firewall based on platform."""
     if platform.system().lower() == 'windows':
@@ -217,24 +246,20 @@ def format_network_info(username: str, password: str, host: str, port: int) -> d
 def save_and_sync_info(system_info, filename='system_info.json'):
     """Save system info and sync network details."""
     try:
-        # Save system info
         root_dir = get_project_root()
         abs_path = os.path.join(root_dir, filename)
         with open(abs_path, 'w') as f:
             json.dump([system_info], f, indent=4)
         logger.debug(f"System information saved to {abs_path}")
 
-        # Check for existing registration silently
         user_manager = UserManager()
         has_registration, user_info = user_manager.check_existing_registration(show_prompt=False)
         
         if has_registration and user_info:
-            # Sync network information
             sync_manager = SyncManager()
             if sync_manager.sync_network_info():
                 logger.info("Network information synchronized successfully")
                 
-                # Verify sync status
                 overall_status, component_status = sync_manager.verify_sync_status()
                 if not overall_status:
                     logger.warning("Sync verification failed:")
