@@ -3,6 +3,7 @@ requests
 psutil
 rich
 httpx
+docker
 loguru
 GitPython
 questionary
