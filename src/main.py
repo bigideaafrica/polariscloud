@@ -57,36 +57,32 @@ def run_as_admin():
         # For Linux/Unix systems
         if os.geteuid() != 0:
             try:
-                # Read password from .env file
-                env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-                if os.path.exists(env_path):
-                    with open(env_path, 'r') as f:
-                        for line in f:
-                            if line.startswith('SSH_PASSWORD='):
-                                password = line.split('=')[1].strip()
-                                logger.info("Restarting with sudo using password from .env...")
-                                
-                                # Construct the sudo command
-                                cmd = ['sudo', '-S'] + [sys.executable] + sys.argv
-                                
-                                # Use subprocess to pipe the password
-                                process = subprocess.Popen(
-                                    cmd,
-                                    stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    universal_newlines=True
-                                )
-                                
-                                # Send password to stdin
-                                stdout, stderr = process.communicate(input=password + '\n')
-                                
-                                if process.returncode != 0:
-                                    logger.error(f"Sudo failed: {stderr}")
-                                    return False
-                                return True
-                
-                logger.error("No .env file found or SSH_PASSWORD not set")
+                # Get password from environment variable
+                password = os.getenv('SSH_PASSWORD')
+                if password:
+                    logger.info("Restarting with sudo using SSH_PASSWORD...")
+                    
+                    # Construct the sudo command
+                    cmd = ['sudo', '-S'] + [sys.executable] + sys.argv
+                    
+                    # Use subprocess to pipe the password
+                    process = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True
+                    )
+                    
+                    # Send password to stdin
+                    stdout, stderr = process.communicate(input=password + '\n')
+                    
+                    if process.returncode != 0:
+                        logger.error(f"Sudo failed: {stderr}")
+                        return False
+                    return True
+            
+                logger.error("SSH_PASSWORD environment variable not set")
                 return False
                 
             except Exception as e:
