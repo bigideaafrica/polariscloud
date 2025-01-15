@@ -71,16 +71,28 @@ Alternatively, you can install Polaris in editable mode:
 pip install -e .
 ```
 
-### 4. Configure SSH Password
+### 4. Configure SSH Password and ngrok Token
 
-Polaris uses your machine's SSH password for secure connections. Add your SSH password to a `.env` file at the root of the project:
+Polaris uses your machine's SSH password and an ngrok authentication token for secure connections. Add your SSH password and ngrok token to a `.env` file at the root of the project:
 
-```bash
+```dotenv
 # .env file
-SSH_PASSWORD=your_password_here
+SSH_PASSWORD=banadda
+NGROK_AUTH_TOKEN=2lwekoAUktCc51onS7imUocGHak_3nVjaNFUzSuCcK6t2jzU7
+# SERVER_URL=http://localhost:8080/api/v1
+SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
 ```
 
-**Note:** The SSH password is used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
+**How to Obtain an ngrok Token:**
+
+If you don't have an ngrok authentication token:
+
+1. Visit [ngrok's website](https://ngrok.com/) and sign up for a free account.
+2. Once logged in, navigate to the **Dashboard**.
+3. Locate your **Auth Token** on the dashboard.
+4. Copy the token and paste it into your `.env` file as shown above under `NGROK_AUTH_TOKEN`.
+
+**Note:** The SSH password and ngrok token are used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
 
 ### 5. Verify Installation
 
