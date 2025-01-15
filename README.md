@@ -24,9 +24,42 @@ git clone https://github.com/bigideainc/polaris-subnet.git
 cd polaris-subnet
 ```
 
-### 2. Install Dependencies
+### 2. Create and Activate a Virtual Environment
 
-Ensure you have **Python 3.6** or higher installed. Then, install the required dependencies:
+It's best practice to use a Python virtual environment to isolate dependencies.
+
+#### Create the Virtual Environment
+
+```bash
+# Create a virtual environment named 'venv'
+python3 -m venv venv
+```
+
+*Note:* If your system uses `python` instead of `python3`, adjust the command accordingly:
+```bash
+python -m venv venv
+```
+
+#### Activate the Virtual Environment
+
+- **On macOS/Linux:**
+  ```bash
+  source venv/bin/activate
+  ```
+- **On Windows (Command Prompt):**
+  ```batch
+  venv\Scripts\activate.bat
+  ```
+- **On Windows (PowerShell):**
+  ```powershell
+  venv\Scripts\Activate.ps1
+  ```
+
+Once activated, your command prompt should indicate the virtual environment is active (e.g., it may start with `(venv)`).
+
+### 3. Install Dependencies
+
+Ensure you have **Python 3.6** or higher installed. With the virtual environment active, install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -38,7 +71,7 @@ Alternatively, you can install Polaris in editable mode:
 pip install -e .
 ```
 
-### 3. Configure SSH Password
+### 4. Configure SSH Password
 
 Polaris uses your machine's SSH password for secure connections. Add your SSH password to a `.env` file at the root of the project:
 
@@ -49,7 +82,7 @@ SSH_PASSWORD=your_password_here
 
 **Note:** The SSH password is used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
 
-### 4. Verify Installation
+### 5. Verify Installation
 
 Check that Polaris is installed correctly by running:
 
@@ -677,4 +710,4 @@ Hit us up on Discord: [compute-33](https://discord.com/channels/9413623220002037
 ---
 
 *For further assistance or inquiries, please reach out to the Polaris Team.*
-``` 
+```
