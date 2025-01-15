@@ -1,7 +1,9 @@
-import msvcrt
 import os
 import platform
 import sys
+import tty
+import termios
+import select
 import time
 from datetime import datetime
 from queue import Queue
@@ -18,6 +20,37 @@ from rich.table import Table
 from rich.text import Text
 
 console = Console()
+
+class KeyboardReader:
+    def __init__(self):
+        self.is_windows = platform.system().lower() == 'windows'
+        if self.is_windows:
+            import msvcrt
+            self.msvcrt = msvcrt
+        else:
+            self.old_settings = None
+
+    def start(self):
+        if not self.is_windows:
+            self.old_settings = termios.tcgetattr(sys.stdin)
+            tty.setraw(sys.stdin.fileno())
+
+    def stop(self):
+        if not self.is_windows and self.old_settings:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+
+    def kbhit(self):
+        if self.is_windows:
+            return self.msvcrt.kbhit()
+        else:
+            dr, dw, de = select.select([sys.stdin], [], [], 0)
+            return dr != []
+
+    def getch(self):
+        if self.is_windows:
+            return self.msvcrt.getch()
+        else:
+            return sys.stdin.read(1).encode()
 
 class BaseLogReader:
     def __init__(self, log_path, log_type, queue):
@@ -285,6 +318,7 @@ def monitor_logs(process_pid=None):
         
         LogReader = get_log_reader_class()
         reader = LogReader(log_path, "stderr", log_queue)
+        keyboard = KeyboardReader()
         
         process_stats = None
         if process_pid:
@@ -295,6 +329,7 @@ def monitor_logs(process_pid=None):
                 return False
 
         reader.start()
+        keyboard.start()
 
         with Live(
             auto_refresh=True,
@@ -306,11 +341,12 @@ def monitor_logs(process_pid=None):
             try:
                 while True:
                     # Handle keyboard input for scrolling
-                    if msvcrt.kbhit():
-                        key = msvcrt.getch()
-                        if key == b'H':  # Up arrow
+                    if keyboard.kbhit():
+                        key = keyboard.getch()
+                        # Handle both Windows and Unix key codes
+                        if key in (b'H', b'A'):  # Up arrow (Windows: H, Unix: A)
                             format_logs.scroll_position = max(0, format_logs.scroll_position - 1)
-                        elif key == b'P':  # Down arrow
+                        elif key in (b'P', b'B'):  # Down arrow (Windows: P, Unix: B)
                             format_logs.scroll_position = format_logs.scroll_position + 1
 
                     while not log_queue.empty():
@@ -334,6 +370,7 @@ def monitor_logs(process_pid=None):
                 console.print("\n[yellow]Monitoring stopped.[/yellow]")
             finally:
                 reader.stop()
+                keyboard.stop()
 
     except Exception as e:
         console.print(f"[red]Monitor failed: {e}[/red]")
