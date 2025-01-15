@@ -1,4 +1,3 @@
-```markdown
 # Polaris CLI Tool
 
 A modern development workspace manager for distributed compute resources. Polaris simplifies managing compute resources, monitoring their status, and automating key tasks in a distributed environment.
@@ -25,9 +24,42 @@ git clone https://github.com/bigideainc/polaris-subnet.git
 cd polaris-subnet
 ```
 
-### 2. Install Dependencies
+### 2. Create and Activate a Virtual Environment
 
-Ensure you have **Python 3.6** or higher installed. Then, install the required dependencies:
+It's best practice to use a Python virtual environment to isolate dependencies.
+
+#### Create the Virtual Environment
+
+```bash
+# Create a virtual environment named 'venv'
+python3 -m venv venv
+```
+
+*Note:* If your system uses `python` instead of `python3`, adjust the command accordingly:
+```bash
+python -m venv venv
+```
+
+#### Activate the Virtual Environment
+
+- **On macOS/Linux:**
+  ```bash
+  source venv/bin/activate
+  ```
+- **On Windows (Command Prompt):**
+  ```batch
+  venv\Scripts\activate.bat
+  ```
+- **On Windows (PowerShell):**
+  ```powershell
+  venv\Scripts\Activate.ps1
+  ```
+
+Once activated, your command prompt should indicate the virtual environment is active (e.g., it may start with `(venv)`).
+
+### 3. Install Dependencies
+
+Ensure you have **Python 3.6** or higher installed. With the virtual environment active, install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -39,18 +71,30 @@ Alternatively, you can install Polaris in editable mode:
 pip install -e .
 ```
 
-### 3. Configure SSH Password
+### 4. Configure SSH Password and ngrok Token
 
-Polaris uses your machine's SSH password for secure connections. Add your SSH password to a `.env` file at the root of the project:
+Polaris uses your machine's SSH password and an ngrok authentication token for secure connections. Add your SSH password and ngrok token to a `.env` file at the root of the project:
 
-```bash
+```dotenv
 # .env file
-SSH_PASSWORD=your_password_here
+SSH_PASSWORD=banadda
+NGROK_AUTH_TOKEN=2lwekoAUktCc51onS7imUocGHak_3nVjaNFUzSuCcK6t2jzU7
+# SERVER_URL=http://localhost:8080/api/v1
+SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
 ```
 
-**Note:** The SSH password is used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
+**How to Obtain an ngrok Token:**
 
-### 4. Verify Installation
+If you don't have an ngrok authentication token:
+
+1. Visit [ngrok's website](https://ngrok.com/) and sign up for a free account.
+2. Once logged in, navigate to the **Dashboard**.
+3. Locate your **Auth Token** on the dashboard.
+4. Copy the token and paste it into your `.env` file as shown above under `NGROK_AUTH_TOKEN`.
+
+**Note:** The SSH password and ngrok token are used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
+
+### 5. Verify Installation
 
 Check that Polaris is installed correctly by running:
 
@@ -185,6 +229,75 @@ Before running `polaris start`, ensure you have the following prerequisites conf
 **Verify SSH Configuration:**
 - **Linux:** Check `/etc/ssh/sshd_config` for correct settings.
 - **Windows:** Ensure OpenSSH Server is properly configured via **Settings** or configuration files.
+
+### 4. Public IP Address for Your Compute Node
+
+**Objective:**  
+Ensure your compute node has a public IP address or is directly accessible from the internet. This allows other nodes and services to connect to your machine without intermediary tunneling solutions.
+
+**Steps to Make Your Compute IP Public:**
+
+#### A. Verify Your Current Public IP
+
+1. **Check Public IP:**
+   - Open a terminal on your compute node and run:
+     ```bash
+     curl ifconfig.me
+     ```
+     or
+     ```bash
+     curl ipinfo.io/ip
+     ```
+   - The returned IP should be a public IP. If it shows a private IP (e.g., 192.168.x.x, 10.x.x.x, or 172.16.x.x to 172.31.x.x), then your machine is behind a NAT and does not have a direct public IP.
+
+#### B. Configuring Public IP Access
+
+If your machine does not have a public IP, follow one of these approaches to expose it:
+
+1. **Direct Public IP from ISP:**
+   - **Request a Public IP:** Contact your Internet Service Provider (ISP) to request a static or dynamic public IP assignment for your machine.
+   - **Configure Network Interface:** 
+     - If given a static IP, configure your network interface with the provided IP, subnet mask, gateway, and DNS settings.
+     - On Linux, for example, you might update your network configuration file or use `nmcli`/`ifconfig` depending on your distribution.
+
+2. **Port Forwarding Through a Router:**
+   - **Access Router Settings:**
+     - Log into your router’s administration panel (usually accessed via a web browser at an address like `192.168.1.1`).
+   - **Configure Port Forwarding:**
+     1. Locate the port forwarding section.
+     2. Add a new port forwarding rule to forward external traffic to your compute node’s internal IP:
+        - **External Port:** e.g., 22 for SSH or a custom port as required by Polaris.
+        - **Internal IP Address:** The local IP of your compute node.
+        - **Internal Port:** The port on which your service is running (e.g., 22 for SSH).
+   - **Save and Apply:** Save changes and restart the router if necessary.
+   - **Determine Your Public IP:** Find your router's public IP by checking the router status page or using a service like [WhatIsMyIP.com](https://www.whatismyip.com/).
+
+3. **Dynamic DNS (if you have a dynamic public IP):**
+   - **Set Up Dynamic DNS:** If your ISP assigns a dynamic public IP, use a Dynamic DNS service (like No-IP, DynDNS, etc.) to associate a domain name with your changing IP.
+   - **Configure Your Router or Client:**
+     - Many routers support Dynamic DNS configuration directly. Input your Dynamic DNS credentials into the router’s DDNS settings.
+     - Alternatively, run a Dynamic DNS client on your compute node to update the DNS record whenever your IP changes.
+
+#### C. Verify Public Accessibility
+
+Once configured, verify that your compute node is accessible from the internet:
+
+- **Test SSH Connection:**
+  ```bash
+  ssh user@your_public_ip_or_ddns_domain -p <forwarded_port>
+  ```
+  Replace `your_public_ip_or_ddns_domain` with your public IP or Dynamic DNS domain and `<forwarded_port>` with the forwarded port number (commonly 22 for SSH).
+
+- **Check Port Status:**
+  Use an online port checking service like [CanYouSeeMe.org](https://canyouseeme.org/) to confirm the relevant port is open and reachable.
+
+**Security Considerations:**
+
+- **Firewall Rules:**  
+  Ensure your firewall (both on the compute node and network level) allows incoming connections on the necessary ports, but also restricts access to trusted IPs when possible.
+
+- **Strong Authentication:**  
+  Use strong passwords, SSH keys, or other authentication methods to secure direct access to your compute node.
 
 ---
 
@@ -597,19 +710,14 @@ For complete technical documentation, including API endpoints, data models, erro
 - **Docker:** Installed and running.
 - **ngrok:** Installed and running to create secure tunnels.
 - **SSH Service:** Active and properly configured on your machine.
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+- **Public IP:** Your compute node should be publicly accessible, either via a direct public IP or properly configured port forwarding.
 
 ---
 
 ## Author
 
 **Polaris Team**  
-Contact: [fred@polariscloud.ai](mailto:fred@polariscloud.ai)
+Hit us up on Discord: [compute-33](https://discord.com/channels/941362322000203776/1324582017513422870)
 
 ---
 
