@@ -1,4 +1,3 @@
-import ctypes
 import json
 import logging
 import os
@@ -6,7 +5,7 @@ import signal
 import subprocess
 import sys
 import time
-
+import platform
 import requests
 
 from src.ngrok_manager import NgrokManager
@@ -20,63 +19,106 @@ from src.utils import configure_logging, get_local_ip, get_project_root
 logger = configure_logging()
 
 def is_admin():
-    """Check if the script is running with administrative privileges on Windows."""
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
-    except AttributeError:
-        return False
+    """Check if the script is running with administrative privileges."""
+    if platform.system().lower() == 'windows':
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except AttributeError:
+            return False
+    else:
+        # For Linux/Unix systems
+        return os.geteuid() == 0
 
 def run_as_admin():
     """
-    Relaunch the current script with administrative privileges on Windows.
+    Relaunch the current script with administrative privileges.
     """
-    try:
-        script_path = os.path.abspath(__file__)
-        params = f'"{script_path}"'
-        
-        ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            sys.executable,
-            params,
-            None,
-            1
-        )
-        logger.info("Script relaunched with administrative privileges.")
+    if platform.system().lower() == 'windows':
+        try:
+            script_path = os.path.abspath(__file__)
+            params = f'"{script_path}"'
+            
+            import ctypes
+            ctypes.windll.shell32.ShellExecuteW(
+                None,
+                "runas",
+                sys.executable,
+                params,
+                None,
+                1
+            )
+            logger.info("Script relaunched with administrative privileges.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to get admin rights: {e}")
+            return False
+    else:
+        # For Linux/Unix systems
+        if os.geteuid() != 0:
+            try:
+                # Get password from environment variable
+                password = os.getenv('SSH_PASSWORD')
+                if password:
+                    logger.info("Restarting with sudo using SSH_PASSWORD...")
+                    
+                    # Construct the sudo command
+                    cmd = ['sudo', '-S'] + [sys.executable] + sys.argv
+                    
+                    # Use subprocess to pipe the password
+                    process = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True
+                    )
+                    
+                    # Send password to stdin
+                    stdout, stderr = process.communicate(input=password + '\n')
+                    
+                    if process.returncode != 0:
+                        logger.error(f"Sudo failed: {stderr}")
+                        return False
+                    return True
+            
+                logger.error("SSH_PASSWORD environment variable not set")
+                return False
+                
+            except Exception as e:
+                logger.exception(f"Failed to restart with sudo: {e}")
+                return False
         return True
-    except Exception as e:
-        logger.exception(f"Failed to get admin rights: {e}")
-        return False
 
-def create_ssh_directory_windows():
-    """Create SSH directory on Windows with administrative privileges."""
-    ssh_dir = r'C:\ProgramData\ssh'
-    
-    # Try using PowerShell commands first
+def configure_ssh():
+    """Configure SSH server for the current platform."""
+    if platform.system().lower() == 'windows':
+        return configure_ssh_windows()
+    else:
+        return configure_ssh_linux()
+
+def configure_ssh_linux():
+    """Configure SSH server on Linux."""
     try:
-        ps_command = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{ssh_dir}\'"'
-        subprocess.run(ps_command, check=True, shell=True, capture_output=True)
-        logger.info(f"SSH directory created at {ssh_dir} using PowerShell")
+        # Check if SSH server is installed
+        result = subprocess.run(['systemctl', 'status', 'ssh'], capture_output=True, text=True)
+        if result.returncode != 0:
+            # Install SSH server if not present
+            logger.info("Installing SSH server...")
+            subprocess.run(['apt-get', 'update'], check=True)
+            subprocess.run(['apt-get', 'install', '-y', 'openssh-server'], check=True)
+        
+        # Start and enable SSH service
+        subprocess.run(['systemctl', 'start', 'ssh'], check=True)
+        subprocess.run(['systemctl', 'enable', 'ssh'], check=True)
+        
+        logger.info("SSH server configured successfully on Linux.")
         return True
     except subprocess.CalledProcessError as e:
-        logger.warning(f"PowerShell directory creation failed: {e}")
-    
-    # Try using cmd.exe as fallback
-    try:
-        cmd_command = f'cmd /c mkdir "{ssh_dir}" 2>nul'
-        subprocess.run(cmd_command, check=True, shell=True, capture_output=True)
-        logger.info(f"SSH directory created at {ssh_dir} using cmd")
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"CMD directory creation failed: {e}")
-    
-    # Try using os.makedirs as final fallback
-    try:
-        os.makedirs(ssh_dir, exist_ok=True)
-        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs")
-        return True
+        logger.error(f"Failed to configure SSH server on Linux: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Failed to create SSH directory: {e}")
+        logger.error(f"Error configuring SSH server: {e}")
         return False
 
 def configure_ssh_windows():
@@ -112,67 +154,108 @@ def configure_ssh_windows():
         logger.error("SSH server configuration failed.")
         return False
 
-def run_as_admin_command(command):
-    """Run a command with administrative privileges."""
+def create_ssh_directory_windows():
+    """Create SSH directory on Windows with administrative privileges."""
+    ssh_dir = r'C:\ProgramData\ssh'
+    
+    # Try using PowerShell commands first
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            shell=True
-        )
-        
-        if result.returncode != 0:
-            logger.error(f"Command '{' '.join(command)}' failed with error: {result.stderr.strip()}")
-            return False
-        
-        logger.debug(f"Command '{' '.join(command)}' executed successfully.")
+        ps_command = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{ssh_dir}\'"'
+        subprocess.run(ps_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using PowerShell")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"PowerShell directory creation failed: {e}")
+    
+    # Try using cmd.exe as fallback
+    try:
+        cmd_command = f'cmd /c mkdir "{ssh_dir}" 2>nul'
+        subprocess.run(cmd_command, check=True, shell=True, capture_output=True)
+        logger.info(f"SSH directory created at {ssh_dir} using cmd")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"CMD directory creation failed: {e}")
+    
+    # Try using os.makedirs as final fallback
+    try:
+        os.makedirs(ssh_dir, exist_ok=True)
+        logger.info(f"SSH directory created at {ssh_dir} using os.makedirs")
         return True
     except Exception as e:
-        logger.exception(f"Error running command '{' '.join(command)}': {e}")
+        logger.error(f"Failed to create SSH directory: {e}")
+        return False
+
+def setup_firewall():
+    """Configure firewall based on platform."""
+    if platform.system().lower() == 'windows':
+        return setup_firewall_windows()
+    else:
+        return setup_firewall_linux()
+
+def setup_firewall_linux():
+    """Configure Linux firewall (ufw) to allow SSH connections."""
+    try:
+        # Check if ufw is installed
+        result = subprocess.run(['which', 'ufw'], capture_output=True)
+        if result.returncode != 0:
+            logger.info("Installing ufw...")
+            subprocess.run(['apt-get', 'update'], check=True)
+            subprocess.run(['apt-get', 'install', '-y', 'ufw'], check=True)
+        
+        # Configure ufw
+        subprocess.run(['ufw', 'allow', 'ssh'], check=True)
+        subprocess.run(['ufw', '--force', 'enable'], check=True)
+        
+        logger.info("Linux firewall configured to allow SSH connections.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure Linux firewall: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Error configuring firewall: {e}")
         return False
 
 def setup_firewall_windows():
     """Configure Windows Firewall to allow SSH connections."""
     firewall_cmd = 'netsh advfirewall firewall add rule name="OpenSSH" dir=in action=allow protocol=TCP localport=22'
-    if run_as_admin_command(firewall_cmd.split()):
+    try:
+        subprocess.run(firewall_cmd, shell=True, check=True, capture_output=True)
         logger.info("Windows Firewall configured to allow SSH connections on port 22.")
         return True
-    else:
-        logger.warning("Failed to configure Windows Firewall for SSH. SSH access might be blocked.")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure Windows Firewall: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Error configuring firewall: {e}")
         return False
 
 def format_network_info(username: str, password: str, host: str, port: int) -> dict:
     """Format network information according to API requirements."""
     return {
-        "internal_ip": str(get_local_ip()),  # Ensure string type
+        "internal_ip": str(get_local_ip()),
         "ssh": f"ssh://{username}@{host}:{port}",
-        "open_ports": ["22"],  # Always a list of strings
+        "open_ports": ["22"],
         "password": str(password),
-        "username": str(username)  # Ensure string type
+        "username": str(username)
     }
 
 def save_and_sync_info(system_info, filename='system_info.json'):
     """Save system info and sync network details."""
     try:
-        # Save system info
         root_dir = get_project_root()
         abs_path = os.path.join(root_dir, filename)
         with open(abs_path, 'w') as f:
             json.dump([system_info], f, indent=4)
         logger.debug(f"System information saved to {abs_path}")
 
-        # Check for existing registration silently
         user_manager = UserManager()
         has_registration, user_info = user_manager.check_existing_registration(show_prompt=False)
         
         if has_registration and user_info:
-            # Sync network information
             sync_manager = SyncManager()
             if sync_manager.sync_network_info():
                 logger.info("Network information synchronized successfully")
                 
-                # Verify sync status
                 overall_status, component_status = sync_manager.verify_sync_status()
                 if not overall_status:
                     logger.warning("Sync verification failed:")
@@ -187,6 +270,7 @@ def save_and_sync_info(system_info, filename='system_info.json'):
         return None
 
 def handle_shutdown(signum, frame):
+    """Handle shutdown signals gracefully."""
     logger.info("Received shutdown signal. Cleaning up...")
     sys.exit(0)
 
@@ -214,13 +298,13 @@ def main():
     
     ngrok = None
     try:
-        # Configure SSH
-        if not configure_ssh_windows():
-            logger.error("Failed to configure SSH on Windows.")
+        # Configure SSH based on platform
+        if not configure_ssh():
+            logger.error("Failed to configure SSH.")
             sys.exit(1)
         
-        # Setup firewall
-        if not setup_firewall_windows():
+        # Setup firewall based on platform
+        if not setup_firewall():
             logger.warning("Could not configure firewall. SSH access might be blocked.")
         
         while True:
