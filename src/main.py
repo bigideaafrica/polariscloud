@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+import platform
 import signal
 import subprocess
 import sys
 import time
-import platform
+
 import requests
 
 from src.ngrok_manager import NgrokManager
@@ -228,16 +229,42 @@ def setup_firewall_windows():
     except Exception as e:
         logger.warning(f"Error configuring firewall: {e}")
         return False
-
-def format_network_info(username: str, password: str, host: str, port: int) -> dict:
-    """Format network information according to API requirements."""
+    
+def format_network_info(username: str, password: str) -> dict:
+    
+    ssh_user = os.environ.get('SSH_USER')
     return {
         "internal_ip": str(get_local_ip()),
-        "ssh": f"ssh://{username}@{host}:{port}",
+        "ssh": f"ssh://{ssh_user}@{os.environ.get('SSH_HOST')}:{os.environ.get('SSH_PORT')}",
         "open_ports": ["22"],
         "password": str(password),
         "username": str(username)
     }
+    
+# def format_network_info(username: str, password: str) -> dict:
+#     """Format network information according to API requirements."""
+#     ssh_user = os.environ.get('SSH_USER')
+#     host = os.environ.get('SSH_HOST')
+#     port = os.environ.get('SSH_PORT')
+#     ssh_password = os.environ.get('SSH_PASSWORD')
+    
+#     return {
+#         "internal_ip": str(get_local_ip()),
+#         "ssh": f"ssh://{ssh_user}@{host}:{port}",
+#         "open_ports": ["22"],
+#         "password": str(ssh_password),
+#         "username": str(ssh_user)
+#     }
+
+# def format_network_info(username: str, password: str, host: str, port: int) -> dict:
+#     """Format network information according to API requirements."""
+#     return {
+#         "internal_ip": str(get_local_ip()),
+#         "ssh": f"ssh://{username}@{host}:{port}",
+#         "open_ports": ["22"],
+#         "password": str(password),
+#         "username": str(username)
+#     }
 
 def save_and_sync_info(system_info, filename='system_info.json'):
     """Save system info and sync network details."""
@@ -273,10 +300,17 @@ def handle_shutdown(signum, frame):
     """Handle shutdown signals gracefully."""
     logger.info("Received shutdown signal. Cleaning up...")
     sys.exit(0)
-
+    
 def main():
     logger.debug("Starting Polaris main function.")
     
+    # Get SSH password from environment
+    ssh_password = os.environ.get('SSH_PASSWORD')
+    if not ssh_password:
+        # password = config.SSH_PASSWORD  # Original fallback commented out
+        logger.error("SSH_PASSWORD environment variable not set")
+        sys.exit(1)
+        
     # Ensure admin rights
     if not is_admin():
         logger.warning("Restarting script with administrative privileges...")
@@ -317,8 +351,8 @@ def main():
             
             # Setup SSH user
             logger.debug("Setting up SSH user.")
-            username, password = ssh.setup_user()
-            if not username or not password:
+            username, _ = ssh.setup_user()  # Ignore returned password, use env
+            if not username:
                 logger.error("Failed to set up SSH user.")
                 sys.exit(1)
             
@@ -329,12 +363,13 @@ def main():
                 logger.error("Failed to start ngrok tunnel.")
                 break
 
-            # Create network info
+            # Create network info using environment password
             network_info = format_network_info(
                 username=username,
-                password=password,
-                host=host,
-                port=port
+                # password=password,  # Original line commented out
+                password=ssh_password,  # Use environment variable password
+                # host=host,
+                # port=port
             )
             
             if system_info and "compute_resources" in system_info:
@@ -370,9 +405,10 @@ def main():
                             break
                         network_info = format_network_info(
                             username=username,
-                            password=password,
-                            host=host,
-                            port=port
+                            # password=password,  # Original line commented out
+                            password=ssh_password,  # Use environment variable password
+                            # host=host,
+                            # port=port
                         )
                         system_info["compute_resources"][0]["network"] = network_info
                         save_and_sync_info(system_info)
@@ -386,9 +422,10 @@ def main():
                             break
                         network_info = format_network_info(
                             username=username,
-                            password=password,
-                            host=host,
-                            port=port
+                            # password=password,  # Original line commented out
+                            password=ssh_password,  # Use environment variable password
+                            # host=host,
+                            # port=port
                         )
                         system_info["compute_resources"][0]["network"] = network_info
                         save_and_sync_info(system_info)
@@ -409,3 +446,139 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# def main():
+#     logger.debug("Starting Polaris main function.")
+    
+#     # Ensure admin rights
+#     if not is_admin():
+#         logger.warning("Restarting script with administrative privileges...")
+#         if run_as_admin():
+#             logger.info("Relaunching Polaris with administrative privileges.")
+#             sys.exit(0)
+#         else:
+#             logger.error("Unable to obtain administrative privileges.")
+#             sys.exit(1)
+
+#     # Create PID file
+#     if not create_pid_file():
+#         logger.error("Polaris is already running or failed to create PID file.")
+#         sys.exit(1)
+    
+#     # Setup signal handlers
+#     signal.signal(signal.SIGINT, handle_shutdown)
+#     signal.signal(signal.SIGTERM, handle_shutdown)
+    
+#     ngrok = None
+#     try:
+#         # Configure SSH based on platform
+#         if not configure_ssh():
+#             logger.error("Failed to configure SSH.")
+#             sys.exit(1)
+        
+#         # Setup firewall based on platform
+#         if not setup_firewall():
+#             logger.warning("Could not configure firewall. SSH access might be blocked.")
+        
+#         while True:
+#             # Get system information
+#             system_info = get_system_info("CPU")
+            
+#             # Initialize managers
+#             ngrok = NgrokManager()
+#             ssh = SSHManager()
+            
+#             # Setup SSH user
+#             logger.debug("Setting up SSH user.")
+#             username, password = ssh.setup_user()
+#             if not username or not password:
+#                 logger.error("Failed to set up SSH user.")
+#                 sys.exit(1)
+            
+#             # Start ngrok tunnel
+#             logger.info("Starting ngrok tunnel...")
+#             host, port = ngrok.start_tunnel(22)
+#             if not host or not port:
+#                 logger.error("Failed to start ngrok tunnel.")
+#                 break
+
+#             # Create network info
+#             network_info = format_network_info(
+#                 username=username,
+#                 password=password,
+#                 host=host,
+#                 port=port
+#             )
+            
+#             if system_info and "compute_resources" in system_info:
+#                 system_info["compute_resources"][0]["network"] = network_info
+            
+#             # Save and sync system information
+#             file_path = save_and_sync_info(system_info)
+            
+#             if file_path:
+#                 logger.info("\n" + "="*50)
+#                 logger.info(f"System information saved to: {file_path}")
+                
+#                 user_manager = UserManager()
+#                 user_info = user_manager.get_user_info()
+#                 if user_info and 'network_info' in user_info:
+#                     network = user_info['network_info']
+#                     logger.info(f"SSH Command: {network.get('ssh', 'N/A')}")
+#                     logger.info(f"Password: {network.get('password', 'N/A')}")
+#                 logger.info("="*50 + "\n")
+#             else:
+#                 logger.error("Failed to save and sync system information")
+            
+#             # Monitor ngrok tunnel
+#             while True:
+#                 try:
+#                     r = requests.get("http://localhost:4040/api/tunnels", timeout=5)
+#                     tunnels = r.json().get("tunnels", [])
+#                     if not tunnels:
+#                         logger.warning("No active tunnels found. Restarting ngrok...")
+#                         host, port = ngrok.start_tunnel(22)
+#                         if not host or not port:
+#                             logger.error("Failed to restart ngrok tunnel.")
+#                             break
+#                         network_info = format_network_info(
+#                             username=username,
+#                             password=password,
+#                             host=host,
+#                             port=port
+#                         )
+#                         system_info["compute_resources"][0]["network"] = network_info
+#                         save_and_sync_info(system_info)
+#                     time.sleep(10)
+#                 except Exception as e:
+#                     logger.warning(f"Tunnel check failed: {e}. Restarting...")
+#                     try:
+#                         host, port = ngrok.start_tunnel(22)
+#                         if not host or not port:
+#                             logger.error("Failed to restart ngrok tunnel.")
+#                             break
+#                         network_info = format_network_info(
+#                             username=username,
+#                             password=password,
+#                             host=host,
+#                             port=port
+#                         )
+#                         system_info["compute_resources"][0]["network"] = network_info
+#                         save_and_sync_info(system_info)
+#                     except Exception as restart_error:
+#                         logger.error(f"Failed to restart tunnel: {restart_error}")
+#                     time.sleep(15)
+                
+#     except KeyboardInterrupt:
+#         logger.info("\nShutdown requested. Cleaning up...")
+#     except Exception as e:
+#         logger.exception(f"Error during setup: {e}")
+#     finally:
+#         if ngrok:
+#             logger.info("Stopping ngrok tunnel...")
+#             ngrok.kill_existing()
+#         remove_pid_file()
+#         logger.info("Shutdown complete.")
+
+# if __name__ == "__main__":
+#     main()
