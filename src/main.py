@@ -9,7 +9,7 @@ import time
 
 import requests
 
-from src.ngrok_manager import NgrokManager
+# from src.ngrok_manager import NgrokManager
 from src.pid_manager import PID_FILE, create_pid_file, remove_pid_file
 from src.ssh_manager import SSHManager
 from src.sync_manager import SyncManager
@@ -330,7 +330,8 @@ def main():
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
     
-    ngrok = None
+    # ngrok = None
+    ngrok = None  # Initialize as None since ngrok is commented out
     try:
         # Configure SSH based on platform
         if not configure_ssh():
@@ -346,7 +347,7 @@ def main():
             system_info = get_system_info("CPU")
             
             # Initialize managers
-            ngrok = NgrokManager()
+            # ngrok = NgrokManager()
             ssh = SSHManager()
             
             # Setup SSH user
@@ -357,11 +358,11 @@ def main():
                 sys.exit(1)
             
             # Start ngrok tunnel
-            logger.info("Starting ngrok tunnel...")
-            host, port = ngrok.start_tunnel(22)
-            if not host or not port:
-                logger.error("Failed to start ngrok tunnel.")
-                break
+            # logger.info("Starting ngrok tunnel...")
+            # host, port = ngrok.start_tunnel(22)
+            # if not host or not port:
+            #     logger.error("Failed to start ngrok tunnel.")
+            #     break
 
             # Create network info using environment password
             network_info = format_network_info(
@@ -395,40 +396,41 @@ def main():
             # Monitor ngrok tunnel
             while True:
                 try:
-                    r = requests.get("http://localhost:4040/api/tunnels", timeout=5)
-                    tunnels = r.json().get("tunnels", [])
-                    if not tunnels:
-                        logger.warning("No active tunnels found. Restarting ngrok...")
-                        host, port = ngrok.start_tunnel(22)
-                        if not host or not port:
-                            logger.error("Failed to restart ngrok tunnel.")
-                            break
-                        network_info = format_network_info(
-                            username=username,
-                            # password=password,  # Original line commented out
-                            password=ssh_password,  # Use environment variable password
-                            # host=host,
-                            # port=port
-                        )
-                        system_info["compute_resources"][0]["network"] = network_info
-                        save_and_sync_info(system_info)
+                    # r = requests.get("http://localhost:4040/api/tunnels", timeout=5)
+                    # tunnels = r.json().get("tunnels", [])
+                    # if not tunnels:
+                    #     logger.warning("No active tunnels found. Restarting ngrok...")
+                    #     host, port = ngrok.start_tunnel(22)
+                    #     if not host or not port:
+                    #         logger.error("Failed to restart ngrok tunnel.")
+                    #         break
+                    #     network_info = format_network_info(
+                    #         username=username,
+                    #         # password=password,  # Original line commented out
+                    #         password=ssh_password,  # Use environment variable password
+                    #         # host=host,
+                    #         # port=port
+                    #     )
+                    #     system_info["compute_resources"][0]["network"] = network_info
+                    #     save_and_sync_info(system_info)
                     time.sleep(10)
                 except Exception as e:
                     logger.warning(f"Tunnel check failed: {e}. Restarting...")
                     try:
-                        host, port = ngrok.start_tunnel(22)
-                        if not host or not port:
-                            logger.error("Failed to restart ngrok tunnel.")
-                            break
-                        network_info = format_network_info(
-                            username=username,
-                            # password=password,  # Original line commented out
-                            password=ssh_password,  # Use environment variable password
-                            # host=host,
-                            # port=port
-                        )
-                        system_info["compute_resources"][0]["network"] = network_info
-                        save_and_sync_info(system_info)
+                        # host, port = ngrok.start_tunnel(22)
+                        # if not host or not port:
+                        #     logger.error("Failed to restart ngrok tunnel.")
+                        #     break
+                        # network_info = format_network_info(
+                        #     username=username,
+                        #     # password=password,  # Original line commented out
+                        #     password=ssh_password,  # Use environment variable password
+                        #     # host=host,
+                        #     # port=port
+                        # )
+                        # system_info["compute_resources"][0]["network"] = network_info
+                        # save_and_sync_info(system_info)
+                        time.sleep(15)
                     except Exception as restart_error:
                         logger.error(f"Failed to restart tunnel: {restart_error}")
                     time.sleep(15)
@@ -439,8 +441,9 @@ def main():
         logger.exception(f"Error during setup: {e}")
     finally:
         if ngrok:
-            logger.info("Stopping ngrok tunnel...")
-            ngrok.kill_existing()
+            # logger.info("Stopping ngrok tunnel...")
+            # ngrok.kill_existing()
+            pass
         remove_pid_file()
         logger.info("Shutdown complete.")
 
@@ -483,18 +486,18 @@ if __name__ == "__main__":
 #         while True:
 #             # Get system information
 #             system_info = get_system_info("CPU")
-            
+                
 #             # Initialize managers
 #             ngrok = NgrokManager()
 #             ssh = SSHManager()
-            
+                
 #             # Setup SSH user
 #             logger.debug("Setting up SSH user.")
 #             username, password = ssh.setup_user()
 #             if not username or not password:
 #                 logger.error("Failed to set up SSH user.")
 #                 sys.exit(1)
-            
+                
 #             # Start ngrok tunnel
 #             logger.info("Starting ngrok tunnel...")
 #             host, port = ngrok.start_tunnel(22)
@@ -509,13 +512,13 @@ if __name__ == "__main__":
 #                 host=host,
 #                 port=port
 #             )
-            
+                
 #             if system_info and "compute_resources" in system_info:
 #                 system_info["compute_resources"][0]["network"] = network_info
             
 #             # Save and sync system information
 #             file_path = save_and_sync_info(system_info)
-            
+                
 #             if file_path:
 #                 logger.info("\n" + "="*50)
 #                 logger.info(f"System information saved to: {file_path}")
@@ -529,7 +532,7 @@ if __name__ == "__main__":
 #                 logger.info("="*50 + "\n")
 #             else:
 #                 logger.error("Failed to save and sync system information")
-            
+                
 #             # Monitor ngrok tunnel
 #             while True:
 #                 try:
