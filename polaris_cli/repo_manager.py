@@ -1,7 +1,6 @@
-# src/repo_manager.py
-
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from src.utils import get_project_root
 
 console = Console()
 
-REPO_URL = "https://github.com/bigideainc/polarise-compute-subnet"
+REPO_URL = "https://github.com/bigideainc/container_service.git"
 REPO_FOLDER_NAME = "compute_subnet"
 
 def get_repo_path():
@@ -31,7 +30,7 @@ def ensure_repository_exists():
         repo_path = get_repo_path()
         os.makedirs(repo_path, exist_ok=True)
         
-        main_py_path = os.path.join(repo_path, "main.py")
+        main_py_path = os.path.join(repo_path, "src", "main.py")
         
         if not os.path.exists(main_py_path):
             console.print("[yellow]Repository not found. Cloning...[/yellow]")
@@ -45,7 +44,7 @@ def ensure_repository_exists():
         else:
             console.print("[green]Repository already exists.[/green]")
             return True, main_py_path
-
+    
     except Exception as e:
         console.print(f"[red]Failed to manage repository: {e}[/red]")
         return False, None
@@ -93,3 +92,50 @@ def update_repository():
     except Exception as e:
         console.print(f"[red]Failed to update repository: {e}[/red]")
         return False
+
+def start_server(env_vars=None):
+    """
+    Start the uvicorn server with the correct configuration.
+    
+    Args:
+        env_vars: Optional dictionary of environment variables
+    
+    Returns:
+        subprocess.Popen: The server process
+    """
+    try:
+        repo_path = get_repo_path()
+        main_py_path = os.path.join(repo_path, "src", "main.py")
+        
+        if not os.path.exists(main_py_path):
+            console.print(f"[red]Server entry point not found at {main_py_path}[/red]")
+            return None
+
+        # Prepare environment
+        env = os.environ.copy()
+        if env_vars:
+            env.update(env_vars)
+
+        # Start uvicorn server
+        cmd = [
+            'uvicorn',
+            'src.main:app',
+            '--reload',
+            '--host', '0.0.0.0',
+            '--port', '8000'
+        ]
+
+        process = subprocess.Popen(
+            cmd,
+            cwd=repo_path,  # Set working directory to repository root
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        console.print("[green]Server started successfully[/green]")
+        return process
+
+    except Exception as e:
+        console.print(f"[red]Failed to start server: {e}[/red]")
+        return None
