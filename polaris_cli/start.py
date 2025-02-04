@@ -13,8 +13,8 @@ import psutil
 from dotenv import load_dotenv
 from rich.console import Console
 
-from polaris_cli.repo_manager import (ensure_repository_exists, start_server,
-                                      update_repository)
+from polaris_cli.repo_manager import (ensure_repository_exists, get_repo_path,
+                                      start_server, update_repository)
 
 # Initialize logging and console
 logging.basicConfig(
@@ -173,39 +173,56 @@ def start_process(process_name, script_path, env_vars=None):
         return False
 
 def start_polaris():
-    """Start both Polaris and Compute Subnet processes with repository checks"""
     ensure_pid_directory()
-
-    # Load environment variables
     env_path = os.path.join(get_project_root(), '.env')
     load_dotenv(dotenv_path=env_path)
+    ensure_repository_exists()
     
-    # First ensure repository exists and get compute script path
-    success, _ = ensure_repository_exists()
-    if not success:
-        console.print("[red]Failed to ensure compute subnet repository exists.[/red]")
-        sys.exit(1)
-        
-    # Then update it to latest version
-    if not update_repository():
-        console.print("[red]Failed to update compute subnet repository.[/red]")
-        sys.exit(1)
+    repo_path = get_repo_path()
+    main_py_path = os.path.join(repo_path, "src", "main.py")
+    
+    log_dir = os.path.join(repo_path, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    stdout_log = os.path.join(log_dir, 'server.log')
+    stderr_log = os.path.join(log_dir, 'server_error.log')
+    
+    # env = os.environ.copy()
+    # env.update({
+    #     'HOST': os.getenv('HOST'),
+    #     'API_PORT': os.getenv('API_PORT'),
+    #     'BASE_SSH_PORT': os.getenv('BASE_SSH_PORT'),
+    #     'SSH_USER': os.getenv('SSH_USER', 'devuser'),
+    #     'SSH_HOST': os.getenv('SSH_HOST', '24.83.13.62')
+    # })
 
-    # Start the server using uvicorn
-    process = start_server({
-        'HOST': os.getenv('HOST', '0.0.0.0'),
-        'API_PORT': os.getenv('API_PORT', '8000'),    # 8000
-        'SSH_PORT_RANGE_START': os.getenv('SSH_PORT_RANGE_START'),  # 15000
-        'SSH_PORT_RANGE_END': os.getenv('SSH_PORT_RANGE_END') 
-    })
+    with open(stdout_log, 'a') as stdout_f, open(stderr_log, 'a') as stderr_f:
+        cmd = [
+    'python3',
+    '-m',
+    'uvicorn',
+    'src.main:app',
+    '--reload',
+    '--host', '0.0.0.0',
+    '--port', '8000'
+     ]
 
-    if not process:
-        sys.exit(1)
+        process = subprocess.Popen(
+            cmd,
+            cwd=repo_path,
+            # env=env,
+            stdout=stdout_f,
+            stderr=stderr_f,
+            start_new_session=True
+        )
 
-    # Create PID file for the server process
-    if not create_pid_file('server', process.pid):
-        process.kill()
-        sys.exit(1)    
+        if create_pid_file('compute_subnet', process.pid):
+            console.print(f"[green]Server started on PID {process.pid}[/green]")
+            console.print(f"[blue]Logs: {stdout_log} and {stderr_log}[/blue]")
+            return True
+        else:
+            process.kill()
+            return False 
 
 def stop_process(pid, process_name, force=False):
     """Stop a single process with privilege handling"""

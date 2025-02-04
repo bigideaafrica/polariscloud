@@ -11,7 +11,7 @@ from src.utils import get_project_root
 
 console = Console()
 
-REPO_URL = "https://github.com/bigideainc/container_service.git"
+REPO_URL = "https://github.com/BANADDA/cloudserver.git"
 REPO_FOLDER_NAME = "compute_subnet"
 
 def get_repo_path():
