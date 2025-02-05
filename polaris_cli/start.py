@@ -1,4 +1,4 @@
-# polaris_cli/start.py
+#!/usr/bin/env python3
 import ctypes
 import logging
 import os
@@ -6,15 +6,14 @@ import platform
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import psutil
 from dotenv import load_dotenv
 from rich.console import Console
 
-from polaris_cli.repo_manager import (ensure_repository_exists, get_repo_path,
-                                      start_server, update_repository)
+from polaris_cli.repo_manager import (ensure_repository_exists,
+                                      update_repository)
 
 # Initialize logging and console
 logging.basicConfig(
@@ -32,26 +31,27 @@ console = Console()
 DETACHED_PROCESS = 0x00000008 if platform.system() == 'Windows' else 0
 PID_DIR = os.path.join(os.path.expanduser('~'), '.polaris', 'pids')
 
+# ---------------- Utility Functions ----------------
+
 def is_admin():
-    """Check if the current process has admin privileges"""
+    """Check if the current process has admin privileges."""
     try:
         if platform.system() == 'Windows':
             return ctypes.windll.shell32.IsUserAnAdmin()
         else:
             return os.geteuid() == 0
-    except:
+    except Exception:
         return False
 
 def elevate_privileges():
-    """Restart the current script with elevated privileges"""
+    """Restart the current script with elevated privileges."""
     if platform.system() == 'Windows':
         script = os.path.abspath(sys.argv[0])
         params = ' '.join(sys.argv[1:])
-        
         try:
             if not is_admin():
                 ctypes.windll.shell32.ShellExecuteW(
-                    None, 
+                    None,
                     "runas",
                     sys.executable,
                     f'"{script}" {params}',
@@ -66,7 +66,6 @@ def elevate_privileges():
         if not is_admin():
             script = os.path.abspath(sys.argv[0])
             params = ' '.join(sys.argv[1:])
-            
             try:
                 cmd = ['sudo', sys.executable, script]
                 if params:
@@ -79,19 +78,22 @@ def elevate_privileges():
     return True
 
 def get_project_root():
-    """Get the project root directory"""
+    """
+    Get the project root directory.
+    (Assuming this launcher is two levels deep from the root.)
+    """
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def ensure_pid_directory():
-    """Ensure PID directory exists"""
+    """Ensure PID directory exists."""
     os.makedirs(PID_DIR, exist_ok=True)
 
 def get_pid_file(process_name):
-    """Get path to PID file for given process"""
+    """Get path to PID file for a given process name."""
     return os.path.join(PID_DIR, f"{process_name}.pid")
 
 def create_pid_file(process_name, pid):
-    """Create PID file for a process"""
+    """Create PID file for a process."""
     try:
         with open(get_pid_file(process_name), 'w') as f:
             f.write(str(pid))
@@ -102,15 +104,15 @@ def create_pid_file(process_name, pid):
         return False
 
 def read_pid(process_name):
-    """Read PID from PID file"""
+    """Read PID from PID file."""
     try:
         with open(get_pid_file(process_name), 'r') as f:
             return int(f.read().strip())
-    except:
+    except Exception:
         return None
 
 def remove_pid_file(process_name):
-    """Remove PID file for a process"""
+    """Remove PID file for a process."""
     try:
         os.remove(get_pid_file(process_name))
         return True
@@ -121,117 +123,12 @@ def remove_pid_file(process_name):
         logger.error(f"Failed to remove PID file for {process_name}: {e}")
         return False
 
-def start_process(process_name, script_path, env_vars=None):
-    """Start a single process with privilege handling"""
-    pid = read_pid(process_name)
-    if pid and psutil.pid_exists(pid):
-        console.print(f"[yellow]{process_name} is already running with PID {pid}.[/yellow]")
-        return False
-
-    # Define log file paths
-    log_dir = os.path.join(get_project_root(), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    stdout_log = os.path.join(log_dir, f'{process_name}_stdout.log')
-    stderr_log = os.path.join(log_dir, f'{process_name}_stderr.log')
-
-    # Prepare environment
-    env = os.environ.copy()
-    if env_vars:
-        env.update(env_vars)
-
-    try:
-        with open(stdout_log, 'a') as stdout_f, open(stderr_log, 'a') as stderr_f:
-            if platform.system() == 'Windows':
-                process = subprocess.Popen(
-                    [sys.executable, script_path],
-                    stdout=stdout_f,
-                    stderr=stderr_f,
-                    creationflags=DETACHED_PROCESS,
-                    env=env,
-                    close_fds=True
-                )
-            else:
-                process = subprocess.Popen(
-                    [sys.executable, script_path],
-                    stdout=stdout_f,
-                    stderr=stderr_f,
-                    start_new_session=True,
-                    env=env,
-                    close_fds=True
-                )
-
-            if create_pid_file(process_name, process.pid):
-                console.print(f"[green]{process_name} started successfully with PID {process.pid}.[/green]")
-                console.print(f"[blue]Logs: stdout -> {stdout_log}, stderr -> {stderr_log}[/blue]")
-                return True
-            else:
-                process.kill()
-                return False
-
-    except Exception as e:
-        logger.error(f"Failed to start {process_name}: {e}")
-        return False
-
-def start_polaris():
-    ensure_pid_directory()
-    env_path = os.path.join(get_project_root(), '.env')
-    load_dotenv(dotenv_path=env_path)
-    ensure_repository_exists()
-    
-    repo_path = get_repo_path()
-    main_py_path = os.path.join(repo_path, "src", "main.py")
-    
-    log_dir = os.path.join(repo_path, 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    
-    stdout_log = os.path.join(log_dir, 'server.log')
-    stderr_log = os.path.join(log_dir, 'server_error.log')
-    
-    # env = os.environ.copy()
-    # env.update({
-    #     'HOST': os.getenv('HOST'),
-    #     'API_PORT': os.getenv('API_PORT'),
-    #     'BASE_SSH_PORT': os.getenv('BASE_SSH_PORT'),
-    #     'SSH_USER': os.getenv('SSH_USER', 'devuser'),
-    #     'SSH_HOST': os.getenv('SSH_HOST', '24.83.13.62')
-    # })
-
-    with open(stdout_log, 'a') as stdout_f, open(stderr_log, 'a') as stderr_f:
-        cmd = [
-    'python3',
-    '-m',
-    'uvicorn',
-    'src.main:app',
-    '--reload',
-    '--host', '0.0.0.0',
-    '--port', '8000'
-     ]
-
-        process = subprocess.Popen(
-            cmd,
-            cwd=repo_path,
-            # env=env,
-            stdout=stdout_f,
-            stderr=stderr_f,
-            start_new_session=True
-        )
-
-        if create_pid_file('compute_subnet', process.pid):
-            console.print(f"[green]Server started on PID {process.pid}[/green]")
-            console.print(f"[blue]Logs: {stdout_log} and {stderr_log}[/blue]")
-            return True
-        else:
-            process.kill()
-            return False 
-
 def stop_process(pid, process_name, force=False):
-    """Stop a single process with privilege handling"""
+    """Stop a single process with privilege handling."""
     try:
         process = psutil.Process(pid)
         console.print(f"[yellow]Terminating {process_name} (PID {pid})...[/yellow]")
-
         try:
-            # Try normal termination first
             process.terminate()
             try:
                 process.wait(timeout=10)
@@ -246,14 +143,12 @@ def stop_process(pid, process_name, force=False):
                     console.print(f"[green]{process_name} forcefully stopped.[/green]")
                     return True
                 return False
-                
         except psutil.AccessDenied:
             if not is_admin():
                 console.print("[yellow]Requesting elevated privileges...[/yellow]")
                 if elevate_privileges():
                     return stop_process(pid, process_name, force)
             return False
-
     except psutil.NoSuchProcess:
         console.print(f"[yellow]Process {pid} not found.[/yellow]")
         return True
@@ -261,73 +156,241 @@ def stop_process(pid, process_name, force=False):
         logger.error(f"Failed to stop {process_name}: {e}")
         return False
 
-def stop_polaris():
-    """Stop all Polaris processes"""
+def stop_all(process_names):
+    """Stop all processes in the given list of process names."""
     success = True
-    
-    # Stop processes in reverse order
-    for process_name in ['heartbeat', 'compute_subnet', 'local_polaris']:
-        pid = read_pid(process_name)
+    for name in process_names:
+        pid = read_pid(name)
         if not pid:
-            console.print(f"[yellow]{process_name} is not running.[/yellow]")
+            console.print(f"[yellow]{name} is not running.[/yellow]")
             continue
-
-        # Try graceful shutdown first
-        if not stop_process(pid, process_name, force=False):
-            # If graceful shutdown fails, try forced shutdown
-            console.print(f"[yellow]Attempting forced shutdown of {process_name}...[/yellow]")
-            if not stop_process(pid, process_name, force=True):
-                console.print(f"[red]Failed to stop {process_name}.[/red]")
+        if not stop_process(pid, name, force=False):
+            console.print(f"[yellow]Attempting forced shutdown of {name}...[/yellow]")
+            if not stop_process(pid, name, force=True):
+                console.print(f"[red]Failed to stop {name}.[/red]")
                 success = False
                 continue
-
-        # Remove PID file
-        remove_pid_file(process_name)
-
+        remove_pid_file(name)
     return success
 
-def check_status():
-    """Check if processes are running"""
-    processes = ['local_polaris', 'compute_subnet', 'heartbeat']
+def check_status_for(process_names):
+    """Check if processes are running for the given list of names."""
     all_running = True
-
-    for process_name in processes:
-        pid = read_pid(process_name)
+    for name in process_names:
+        pid = read_pid(name)
         if pid and psutil.pid_exists(pid):
             try:
                 process = psutil.Process(pid)
                 if process.is_running():
-                    console.print(f"[green]{process_name} is running with PID {pid}.[/green]")
+                    console.print(f"[green]{name} is running with PID {pid}.[/green]")
                     continue
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
-        
-        console.print(f"[yellow]{process_name} is not running.[/yellow]")
+        console.print(f"[yellow]{name} is not running.[/yellow]")
         all_running = False
-        remove_pid_file(process_name)
-
+        remove_pid_file(name)
     return all_running
 
-def main():
-    """Main entry point"""
-    if len(sys.argv) != 2:
-        console.print("[red]Usage: polaris [start|stop|status][/red]")
+# ---------------- Mode-specific Start Functions ----------------
+
+def start_api():
+    """Start the API server (FastAPI app) and optionally the Heartbeat service."""
+    ensure_pid_directory()
+    project_root = get_project_root()  # e.g., /home/tang/polaris-subnet
+    env_path = os.path.join(project_root, '.env')
+    load_dotenv(dotenv_path=env_path)
+    ensure_repository_exists()
+
+    # Setup common log directory
+    log_dir = os.path.join(project_root, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    # --- Start API Server (Uvicorn) ---
+    api_stdout_log = os.path.join(log_dir, 'api_server.log')
+    api_stderr_log = os.path.join(log_dir, 'api_server_error.log')
+    # The ASGI app is in compute_subnet/src/main.py (module path: src.main:app) when in compute_subnet folder.
+    # We change directory so that the compute_subnet package is visible.
+    api_cmd = [
+        'python3',
+        '-m', 'uvicorn',
+        'src.main:app',
+        '--reload',
+        '--host', '0.0.0.0',
+        '--port', '8000'
+    ]
+    # Run API server from within compute_subnet directory
+    api_cwd = os.path.join(project_root, 'compute_subnet')
+    try:
+        with open(api_stdout_log, 'a') as stdout, open(api_stderr_log, 'a') as stderr:
+            api_proc = subprocess.Popen(
+                api_cmd,
+                cwd=api_cwd,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True
+            )
+        logger.info(f"API server started with command: {' '.join(api_cmd)}")
+        console.print("[blue]API server started...[/blue]")
+    except Exception as e:
+        console.print(f"[red]Failed to start API server: {e}[/red]")
         sys.exit(1)
 
-    command = sys.argv[1].lower()
+    if create_pid_file('api', api_proc.pid):
+        console.print(f"[green]API server running on PID {api_proc.pid}[/green]")
+        console.print(f"[blue]API logs: {api_stdout_log} and {api_stderr_log}[/blue]")
+    else:
+        api_proc.kill()
+        sys.exit(1)
 
-    if command == 'start':
-        start_polaris()
-    elif command == 'stop':
-        if not stop_polaris():
+    # --- (Optional) Start Heartbeat Service ---
+    heartbeat_stdout_log = os.path.join(log_dir, 'heartbeat.log')
+    heartbeat_stderr_log = os.path.join(log_dir, 'heartbeat_error.log')
+    heartbeat_cmd = [
+        'python3',
+        os.path.join(project_root, 'polaris_cli', 'heartbeat_service.py')
+    ]
+    try:
+        with open(heartbeat_stdout_log, 'a') as h_out, open(heartbeat_stderr_log, 'a') as h_err:
+            heartbeat_proc = subprocess.Popen(
+                heartbeat_cmd,
+                cwd=project_root,
+                stdout=h_out,
+                stderr=h_err,
+                start_new_session=True
+            )
+        logger.info(f"Heartbeat service started with command: {' '.join(heartbeat_cmd)}")
+        console.print("[blue]Heartbeat service started...[/blue]")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to start Heartbeat service: {e}[/yellow]")
+        logger.error("Failed to start Heartbeat service")
+        heartbeat_proc = None
+
+    if heartbeat_proc:
+        if create_pid_file('heartbeat', heartbeat_proc.pid):
+            console.print(f"[green]Heartbeat service running on PID {heartbeat_proc.pid}[/green]")
+            console.print(f"[blue]Heartbeat logs: {heartbeat_stdout_log} and {heartbeat_stderr_log}[/blue]")
+        else:
+            heartbeat_proc.kill()
+            console.print("[yellow]Warning: Failed to create PID file for Heartbeat service.[/yellow]")
+
+    return True
+
+def start_system():
+    """Start the System tasks process (runs the system main script)."""
+    ensure_pid_directory()
+    project_root = get_project_root()  # e.g., /home/tang/polaris-subnet
+    env_path = os.path.join(project_root, '.env')
+    load_dotenv(dotenv_path=env_path)
+    ensure_repository_exists()
+
+    # Setup common log directory
+    log_dir = os.path.join(project_root, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    sys_stdout_log = os.path.join(log_dir, 'system_main.log')
+    sys_stderr_log = os.path.join(log_dir, 'system_main_error.log')
+    # The system main is located at /home/tang/polaris-subnet/src/main.py
+    sys_cmd = [
+        'python3',
+        os.path.join(project_root, 'src', 'main.py')
+    ]
+    try:
+        with open(sys_stdout_log, 'a') as stdout, open(sys_stderr_log, 'a') as stderr:
+            sys_proc = subprocess.Popen(
+                sys_cmd,
+                cwd=project_root,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True
+            )
+        logger.info(f"System process started with command: {' '.join(sys_cmd)}")
+        console.print("[blue]System process started...[/blue]")
+    except Exception as e:
+        console.print(f"[red]Failed to start system process: {e}[/red]")
+        sys.exit(1)
+
+    if create_pid_file('system', sys_proc.pid):
+        console.print(f"[green]System process running on PID {sys_proc.pid}[/green]")
+        console.print(f"[blue]System logs: {sys_stdout_log} and {sys_stderr_log}[/blue]")
+    else:
+        sys_proc.kill()
+        sys.exit(1)
+
+    return True
+
+def stop_api():
+    """Stop the API-related processes (API server and heartbeat)."""
+    names = ['api', 'heartbeat']
+    return stop_all(names)
+
+def stop_system():
+    """Stop the System tasks process."""
+    return stop_all(['system'])
+
+def status_api():
+    """Check status of the API-related processes."""
+    return check_status_for(['api', 'heartbeat'])
+
+def status_system():
+    """Check status of the System tasks process."""
+    return check_status_for(['system'])
+
+# ---------------- Main Dispatcher ----------------
+
+def main():
+    """
+    Usage:
+      polaris [api|system] [start|stop|status]
+
+    - 'api' mode starts the FastAPI server (and heartbeat service) from compute_subnet.
+    - 'system' mode starts the system tasks process from src/main.py.
+    """
+    if len(sys.argv) != 3:
+        console.print("[red]Usage: polaris [api|system] [start|stop|status][/red]")
+        sys.exit(1)
+
+    mode = sys.argv[1].lower()
+    command = sys.argv[2].lower()
+
+    if not is_admin():
+        console.print("[yellow]Not running with administrative privileges. Attempting to elevate...[/yellow]")
+        if elevate_privileges():
+            sys.exit(0)
+        else:
+            console.print("[red]Failed to obtain administrative privileges.[/red]")
             sys.exit(1)
-    elif command == 'status':
-        if not check_status():
+
+    if mode == "api":
+        if command == "start":
+            start_api()
+        elif command == "stop":
+            if not stop_api():
+                sys.exit(1)
+        elif command == "status":
+            if not status_api():
+                sys.exit(1)
+        else:
+            console.print(f"[red]Unknown command: {command}[/red]")
+            sys.exit(1)
+    elif mode == "system":
+        if command == "start":
+            start_system()
+        elif command == "stop":
+            if not stop_system():
+                sys.exit(1)
+        elif command == "status":
+            if not status_system():
+                sys.exit(1)
+        else:
+            console.print(f"[red]Unknown command: {command}[/red]")
             sys.exit(1)
     else:
-        console.print(f"[red]Unknown command: {command}[/red]")
-        console.print("[red]Usage: polaris [start|stop|status][/red]")
+        console.print("[red]Unknown mode. Use 'api' or 'system'.[/red]")
         sys.exit(1)
+
+start_polaris = start_api
+stop_polaris = stop_api
+check_status = status_api
 
 if __name__ == "__main__":
     main()
