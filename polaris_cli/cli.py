@@ -14,7 +14,8 @@ from .heartbeat_monitor import monitor_heartbeat
 from .log_monitor import check_main
 from .register import register_miner
 from .repo_manager import update_repository
-from .start import check_status, start_polaris, stop_polaris
+from .start import (check_status, start_polaris, start_system, stop_polaris,
+                    stop_system)
 from .val_start import check_validator_status, start_validator, stop_validator
 from .view_pod import view_pod
 
@@ -111,7 +112,19 @@ def start():
             start_validator(wallet_name)
     else:
         console.print("\n[info]Starting Miner...[/info]")
-        start_polaris()
+        # Start the system process first
+        if not start_system():
+            console.print("[error]Failed to start system process.[/error]")
+            return
+            
+        # Then start the API process
+        if not start_polaris():
+            console.print("[error]Failed to start API process.[/error]")
+            # Stop the system process if API fails
+            stop_system()
+            return
+            
+        console.print("[success]Miner processes started successfully.[/success]")
 
 @cli.command()
 def stop():
