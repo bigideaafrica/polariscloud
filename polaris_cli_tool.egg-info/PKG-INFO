@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: polaris-cli-tool
 Version: 1.0.7
 Summary: Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
@@ -22,3 +22,10 @@ Requires-Dist: pyyaml
 Requires-Dist: psutil
 Requires-Dist: python-dotenv
 Requires-Dist: pid
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

@@ -19,23 +19,29 @@ from src.utils import configure_logging, get_local_ip, get_project_root
 
 logger = configure_logging()
 
+def is_macos():
+    return platform.system().lower() == 'darwin'
+
 def is_admin():
     """Check if the script is running with administrative privileges."""
-    if platform.system().lower() == 'windows':
+    system_name = platform.system().lower()
+    if system_name == 'windows':
         try:
             import ctypes
             return ctypes.windll.shell32.IsUserAnAdmin() != 0
         except AttributeError:
             return False
-    else:
-        # For Linux/Unix systems
+    elif system_name in ['linux', 'darwin']:  # Include macOS (darwin)
         return os.geteuid() == 0
+    else:
+        raise NotImplementedError(f"Admin check is not implemented for {system_name}")
 
 def run_as_admin():
     """
     Relaunch the current script with administrative privileges.
     """
-    if platform.system().lower() == 'windows':
+    system_name = platform.system().lower()
+    if system_name == 'windows':
         try:
             script_path = os.path.abspath(__file__)
             params = f'"{script_path}"'
@@ -54,8 +60,7 @@ def run_as_admin():
         except Exception as e:
             logger.exception(f"Failed to get admin rights: {e}")
             return False
-    else:
-        # For Linux/Unix systems
+    elif system_name in ['linux', 'darwin']:  # Include macOS (darwin) with Linux logic
         if os.geteuid() != 0:
             try:
                 # Get password from environment variable
@@ -90,13 +95,48 @@ def run_as_admin():
                 logger.exception(f"Failed to restart with sudo: {e}")
                 return False
         return True
+    else:
+        raise NotImplementedError(f"Admin privileges escalation is not supported for {system_name}")
 
 def configure_ssh():
     """Configure SSH server for the current platform."""
-    if platform.system().lower() == 'windows':
+    system_name = platform.system().lower()
+    if system_name == 'windows':
         return configure_ssh_windows()
-    else:
+    elif system_name == 'linux':
         return configure_ssh_linux()
+    elif system_name == 'darwin':  # macOS
+        return configure_ssh_macos()
+    else:
+        logger.error(f"SSH configuration is not supported for {system_name}")
+        return False
+
+def configure_ssh_macos():
+    """Configure SSH server on macOS."""
+    try:
+        # Check if SSH is already enabled
+        result = subprocess.run(['sudo', 'systemsetup', '-getremotelogin'], capture_output=True, text=True)
+        if 'On' in result.stdout:
+            logger.info("SSH is already enabled on macOS.")
+            return True
+
+        # Enable SSH on macOS
+        logger.info("Enabling SSH on macOS...")
+        subprocess.run(['sudo', 'systemsetup', '-setremotelogin', 'on'], check=True)
+
+        # Restart SSH service to apply changes
+        logger.info("Restarting SSH service on macOS...")
+        subprocess.run(['sudo', 'launchctl', 'unload', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
+        subprocess.run(['sudo', 'launchctl', 'load', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
+
+        logger.info("SSH configured successfully on macOS.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to configure SSH on macOS: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error configuring SSH on macOS: {e}")
+        return False
 
 def configure_ssh_linux():
     """Configure SSH server on Linux."""
@@ -188,10 +228,49 @@ def create_ssh_directory_windows():
 
 def setup_firewall():
     """Configure firewall based on platform."""
-    if platform.system().lower() == 'windows':
+    system_name = platform.system().lower()
+    if system_name == 'windows':
         return setup_firewall_windows()
-    else:
+    elif system_name == 'linux':
         return setup_firewall_linux()
+    elif system_name == 'darwin':  # macOS
+        return setup_firewall_macos()
+    else:
+        logger.error(f"Firewall configuration is not supported for {system_name}")
+        return False
+
+def setup_firewall_macos():
+    """Configure macOS firewall to allow SSH connections."""
+    try:
+        # Check if pfctl (Packet Filter) is active
+        result = subprocess.run(['sudo', 'pfctl', '-s', 'info'], capture_output=True, text=True)
+        if result.returncode == 0:
+            logger.info("macOS firewall (pf) is active.")
+
+        # Check if SSH is allowed through the macOS firewall
+        result = subprocess.run(['sudo', 'pfctl', '-s', 'rules'], capture_output=True, text=True)
+        if '22' in result.stdout:
+            logger.info("SSH rule already exists in macOS firewall.")
+            return True
+
+        # Add firewall rule to allow SSH
+        logger.info("Adding firewall rule to allow SSH on macOS...")
+        pf_config_path = '/etc/pf.conf'
+        with open(pf_config_path, 'a') as pf_file:
+            pf_file.write("\n# Allow SSH\npass in proto tcp from any to any port 22")
+
+        # Reload pf configuration
+        subprocess.run(['sudo', 'pfctl', '-f', pf_config_path], check=True)
+        subprocess.run(['sudo', 'pfctl', '-e'], check=True)
+
+        logger.info("macOS firewall configured to allow SSH connections.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to configure macOS firewall: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error configuring macOS firewall: {e}")
+        return False
 
 def setup_firewall_linux():
     """Configure Linux firewall (ufw) to allow SSH connections."""

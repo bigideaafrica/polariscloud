@@ -10,6 +10,12 @@ import uuid
 
 import psutil
 import requests
+import subprocess
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger('remote_access')
 
@@ -18,6 +24,8 @@ def is_windows():
 
 def is_linux():
     return platform.system().lower() == "linux"
+def is_macos():
+    return platform.system().lower() == "darwin"  # macOS is reported as "Darwin" by platform.system()
 
 def get_location():
     try:
@@ -106,6 +114,57 @@ def get_cpu_info_linux():
     except Exception as e:
         logger.error(f"Failed to get Linux CPU info: {e}")
         return None
+    
+
+def get_cpu_info_macos():
+    try:
+        # Using sysctl to get CPU information on macOS
+        sysctl_cmd = ["sysctl", "-n", "machdep.cpu.brand_string"]
+        r = subprocess.run(sysctl_cmd, capture_output=True, text=True, check=True)
+        cpu_name = r.stdout.strip()
+
+        sysctl_cmd = ["sysctl", "-n", "machdep.cpu.core_count"]
+        r = subprocess.run(sysctl_cmd, capture_output=True, text=True, check=True)
+        total_cores = int(r.stdout.strip())
+
+        sysctl_cmd = ["sysctl", "-n", "machdep.cpu.thread_count"]
+        r = subprocess.run(sysctl_cmd, capture_output=True, text=True, check=True)
+        total_threads = int(r.stdout.strip())
+
+        sysctl_cmd = ["sysctl", "-n", "hw.memsize"]
+        r = subprocess.run(sysctl_cmd, capture_output=True, text=True, check=True)
+        ram_size = int(r.stdout.strip()) / (1024**3)  # Convert bytes to GB
+
+        # Capture CPU family
+        sysctl_cmd = ["sysctl", "-n", "hw.cpufamily"]
+        r = subprocess.run(sysctl_cmd, capture_output=True, text=True, check=True)
+        cpu_family = r.stdout.strip()  # The family identifier
+
+        # Hardcode the CPU speeds in GHz
+        cpu_max_mhz = 3.5  # Maximum speed in GHz
+        cpu_min_mhz = 1.4  # Minimum speed in GHz
+
+        return {
+            "op_modes": "64-bit",
+            "address_sizes": "64 bits",
+            "byte_order": "Little Endian",
+            "total_cpus": total_threads,
+            "online_cpus": str(list(range(total_threads))),
+            "vendor_id": "Apple",
+            "cpu_name": cpu_name,
+            "cpu_family": cpu_family,  # Added CPU family information
+            "model": 0,  # Default to 0 if not available
+            "threads_per_core": total_threads // total_cores if total_cores else 1,
+            "cores_per_socket": total_cores,
+            "sockets": 1,
+            "stepping": 0,  # Default to 0 if not available
+            "cpu_max_mhz": cpu_max_mhz,  # Set hardcoded max GHz value
+            "cpu_min_mhz": cpu_min_mhz   # Set hardcoded min GHz value
+        }
+    except Exception as e:
+        logger.error(f"Failed to get macOS CPU info: {e}")
+        return None
+
 
 def get_gpu_info_windows():
     try:
@@ -161,6 +220,33 @@ def get_gpu_info_linux():
             }
     except Exception as e:
         logger.error(f"Failed to get Linux GPU info: {e}")
+        return None
+    
+
+def get_gpu_info_macos():
+    try:
+        cmd = ["system_profiler", "SPDisplaysDataType", "-json"]
+        r = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        gpu_info = json.loads(r.stdout)
+
+        # Extract the GPU details
+        graphics = gpu_info[0].get("spdisplays_gpu_data", [])
+        if not graphics:
+            logger.error("No GPU info found on macOS.")
+            return None
+        
+        primary_gpu = graphics[0]
+        memory_gb = float(primary_gpu.get("spdisplays_video_memory", 0)) / (1024**3)  # Convert bytes to GB
+        
+        return {
+            "gpu_name": primary_gpu.get("spdisplays_device_name", "Unknown"),
+            "memory_size": f"{memory_gb:.2f}GB",
+            "cuda_cores": None,  # macOS doesn't expose CUDA cores directly
+            "clock_speed": primary_gpu.get("spdisplays_pixel_depth", "Unknown"),
+            "power_consumption": None  # macOS doesn't expose power consumption directly
+        }
+    except Exception as e:
+        logger.error(f"Failed to get macOS GPU info: {e}")
         return None
 
 def get_system_ram_gb():
@@ -238,6 +324,46 @@ def get_storage_info():
                     total_bytes = psutil.disk_usage('/').total
                     storage_info["capacity"] = f"{(total_bytes / (1024**3)):.2f}GB"
                     break
+        elif is_macos():
+            # Run the system_profiler command to get storage details
+            cmd = ["system_profiler", "SPStorageDataType"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            storage_output = result.stdout
+
+            # Split into sections by double newlines
+            sections = storage_output.split("\n\n")
+            
+            # Process each section to find primary volume (Mount Point: /)
+            for section in sections:
+                if "Mount Point: /" in section:
+                    # Extract capacity
+                    capacity_match = re.search(r"Capacity:\s*([\d.,]+)\sGB", section)
+                    if capacity_match:
+                        storage_info["capacity"] = capacity_match.group(1) + "GB"
+
+                    # Extract medium type
+                    medium_type_match = re.search(r"Medium Type:\s*(.*)", section)
+                    if medium_type_match:
+                        medium_type = medium_type_match.group(1).strip()
+                        if "SSD" in medium_type:
+                            storage_info["type"] = "SSD"
+                            storage_info["read_speed"] = "3000MB/s"
+                            storage_info["write_speed"] = "2500MB/s"
+                        elif "HDD" in medium_type:
+                            storage_info["type"] = "HDD"
+                            storage_info["read_speed"] = "150MB/s"
+                            storage_info["write_speed"] = "100MB/s"
+                        elif "Fusion" in medium_type:
+                            storage_info["type"] = "Fusion Drive"
+                            storage_info["read_speed"] = "600MB/s"
+                            storage_info["write_speed"] = "500MB/s"
+
+                    # Extract file system
+                    file_system_match = re.search(r"File System:\s*(.*)", section)
+                    if file_system_match:
+                        storage_info["file_system"] = file_system_match.group(1).strip()
+                    
+                    break  # Stop after finding the primary volume
                     
     except Exception as e:
         logger.error(f"Failed to get storage info: {e}")
@@ -257,6 +383,10 @@ def get_system_info(resource_type=None):
         ram = get_system_ram_gb()
         storage = get_storage_info()
 
+
+                # Determine platform once
+        platform_type = platform.system().lower()
+        
         # Base resource without cpu_specs or gpu_specs
         resource = {
             "id": resource_id,
@@ -270,9 +400,24 @@ def get_system_info(resource_type=None):
 
         # Add the appropriate specs based on resource type
         if resource_type.upper() == "CPU":
-            resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
+            if platform_type == "windows":
+                resource["cpu_specs"] = get_cpu_info_windows()
+            elif platform_type == "linux":
+                resource["cpu_specs"] = get_cpu_info_linux()
+            elif platform_type == "darwin":  # macOS
+                resource["cpu_specs"] = get_cpu_info_macos()
+            else:
+                logger.warning(f"Unsupported platform for CPU info: {platform_type}")
+
         elif resource_type.upper() == "GPU":
-            resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
+            if platform_type == "windows":
+                resource["gpu_specs"] = get_gpu_info_windows()
+            elif platform_type == "linux":
+                resource["gpu_specs"] = get_gpu_info_linux()
+            elif platform_type == "darwin":  # macOS
+                resource["gpu_specs"] = get_gpu_info_macos()
+            else:
+                logger.warning(f"Unsupported platform for GPU info: {platform_type}")
 
         return {
             "location": location,
