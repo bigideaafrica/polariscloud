@@ -77,14 +77,14 @@ Polaris uses SSH and network port configuration for secure connections. Add your
 
 ```dotenv
 # .env file
-HOST=24.83.13.62
+HOST=xx.xx.xx.xx
 API_PORT=8000
-SSH_PORT_RANGE_START=11000
-SSH_PORT_RANGE_END=11002
-SSH_PASSWORD=Yogptcommune1
+SSH_PORT_RANGE_START=11xxx
+SSH_PORT_RANGE_END=11xx2
+SSH_PASSWORD=...
 SSH_USER=tang
-SSH_HOST=24.83.13.62
-SSH_PORT=11000
+SSH_HOST=xx.xx.xx.xx
+SSH_PORT=1xxxx
 SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
 ```
 
