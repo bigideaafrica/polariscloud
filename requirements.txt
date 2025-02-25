@@ -7,6 +7,7 @@ rich
 httpx
 docker
 loguru
+communex
 bittensor
 GitPython
 questionary
@@ -14,6 +15,5 @@ python-dotenv
 click==8.1.3
 tabulate==0.8.10
 click-spinner
-communex
 cryptography>=43.0.3,<44.0.0
 windows-curses; sys_platform == 'win32'
