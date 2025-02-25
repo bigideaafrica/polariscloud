@@ -1,4 +1,4 @@
-# Polaris CLI Tool
+# Polaris Compute Subnet
 
 A modern development workspace manager for distributed compute resources. Polaris simplifies managing compute resources, monitoring their status, and automating key tasks in a distributed environment.
 
@@ -9,7 +9,7 @@ A modern development workspace manager for distributed compute resources. Polari
 - **Register and manage compute resources:** Add and monitor distributed compute nodes.
 - **Monitor system status:** View system health and active processes.
 - **Manage SSH connections:** Automate and configure secure SSH connections.
-- **Automated tunnel setup:** Establish secure tunnels seamlessly.
+- **Direct connection support:** Establish secure connections using your public IP.
 - **Cross-platform support:** Works on Windows, Linux, and macOS.
 
 ---
@@ -71,28 +71,35 @@ Alternatively, you can install Polaris in editable mode:
 pip install -e .
 ```
 
-### 4. Configure SSH Password and ngrok Token
+### 4. Configure SSH and Network Settings
 
-Polaris uses your machine's SSH password and an ngrok authentication token for secure connections. Add your SSH password and ngrok token to a `.env` file at the root of the project:
+Polaris uses SSH and network port configuration for secure connections. Add your SSH and network settings to a `.env` file at the root of the project:
 
 ```dotenv
 # .env file
-SSH_PASSWORD=banadda
-NGROK_AUTH_TOKEN=2lwekoAUktCc51onS7imUocGHak_3nVjaNFUzSuCcK6t2jzU7
-# SERVER_URL=http://localhost:8080/api/v1
+HOST=24.83.13.62
+API_PORT=8000
+SSH_PORT_RANGE_START=11000
+SSH_PORT_RANGE_END=11002
+SSH_PASSWORD=Yogptcommune1
+SSH_USER=tang
+SSH_HOST=24.83.13.62
+SSH_PORT=11000
 SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
 ```
 
-**How to Obtain an ngrok Token:**
+**Important Configuration Settings:**
 
-If you don't have an ngrok authentication token:
+- `HOST`: Your machine's public IP address
+- `API_PORT`: Port for the API service
+- `SSH_PORT_RANGE_START` and `SSH_PORT_RANGE_END`: Range of SSH ports to use
+- `SSH_PASSWORD`: Your SSH password
+- `SSH_USER`: Your SSH username
+- `SSH_HOST`: The SSH host (usually your public IP)
+- `SSH_PORT`: The primary SSH port to use
+- `SERVER_URL`: The orchestrator server URL
 
-1. Visit [ngrok's website](https://ngrok.com/) and sign up for a free account.
-2. Once logged in, navigate to the **Dashboard**.
-3. Locate your **Auth Token** on the dashboard.
-4. Copy the token and paste it into your `.env` file as shown above under `NGROK_AUTH_TOKEN`.
-
-**Note:** The SSH password and ngrok token are used to configure and manage secure SSH tunnels between your machine and the Polaris compute network.
+**Note:** The SSH password is used to configure and manage secure SSH connections between your machine and the Polaris compute network.
 
 ### 5. Verify Installation
 
@@ -166,29 +173,7 @@ Before running `polaris start`, ensure you have the following prerequisites conf
     sudo systemctl start docker
     ```
 
-### 2. ngrok Running
-
-**Installation:**
-- Download and install ngrok from [ngrok's website](https://ngrok.com/download).
-
-**Setup and Running a Tunnel:**
-- **Basic Tunnel (No Authentication Required):**
-  ```bash
-  ngrok tcp 22
-  ```
-  **Sample Output:**
-  ```
-  Session Status                online
-  Account                       Example User (Plan: Free)
-  Version                       2.3.40
-  Region                        United States (us)
-  Web Interface                 http://127.0.0.1:4040
-  Forwarding                    tcp://0.tcp.ngrok.io:12345 -> localhost:22
-  ```
-  - **Explanation:**
-    - `Forwarding` provides a public URL (`tcp://0.tcp.ngrok.io:12345`) that tunnels to your local SSH service (`localhost:22`).
-
-### 3. SSH Service Running
+### 2. SSH Service Running
 
 **Check SSH Status:**
 - **Linux:**
@@ -230,10 +215,10 @@ Before running `polaris start`, ensure you have the following prerequisites conf
 - **Linux:** Check `/etc/ssh/sshd_config` for correct settings.
 - **Windows:** Ensure OpenSSH Server is properly configured via **Settings** or configuration files.
 
-### 4. Public IP Address for Your Compute Node
+### 3. Public IP Address for Your Compute Node
 
 **Objective:**  
-Ensure your compute node has a public IP address or is directly accessible from the internet. This allows other nodes and services to connect to your machine without intermediary tunneling solutions.
+Ensure your compute node has a public IP address or is directly accessible from the internet. This allows other nodes and services to connect to your machine without intermediary solutions.
 
 **Steps to Make Your Compute IP Public:**
 
@@ -262,20 +247,19 @@ If your machine does not have a public IP, follow one of these approaches to exp
 
 2. **Port Forwarding Through a Router:**
    - **Access Router Settings:**
-     - Log into your router’s administration panel (usually accessed via a web browser at an address like `192.168.1.1`).
+     - Log into your router's administration panel (usually accessed via a web browser at an address like `192.168.1.1`).
    - **Configure Port Forwarding:**
      1. Locate the port forwarding section.
-     2. Add a new port forwarding rule to forward external traffic to your compute node’s internal IP:
-        - **External Port:** e.g., 22 for SSH or a custom port as required by Polaris.
-        - **Internal IP Address:** The local IP of your compute node.
-        - **Internal Port:** The port on which your service is running (e.g., 22 for SSH).
+     2. Add new port forwarding rules to forward external traffic to your compute node's internal IP:
+        - Forward the API port (e.g., 8000)
+        - Forward the SSH port range (e.g., 11000-11002)
    - **Save and Apply:** Save changes and restart the router if necessary.
    - **Determine Your Public IP:** Find your router's public IP by checking the router status page or using a service like [WhatIsMyIP.com](https://www.whatismyip.com/).
 
 3. **Dynamic DNS (if you have a dynamic public IP):**
    - **Set Up Dynamic DNS:** If your ISP assigns a dynamic public IP, use a Dynamic DNS service (like No-IP, DynDNS, etc.) to associate a domain name with your changing IP.
    - **Configure Your Router or Client:**
-     - Many routers support Dynamic DNS configuration directly. Input your Dynamic DNS credentials into the router’s DDNS settings.
+     - Many routers support Dynamic DNS configuration directly. Input your Dynamic DNS credentials into the router's DDNS settings.
      - Alternatively, run a Dynamic DNS client on your compute node to update the DNS record whenever your IP changes.
 
 #### C. Verify Public Accessibility
@@ -284,12 +268,12 @@ Once configured, verify that your compute node is accessible from the internet:
 
 - **Test SSH Connection:**
   ```bash
-  ssh user@your_public_ip_or_ddns_domain -p <forwarded_port>
+  ssh user@your_public_ip -p <ssh_port>
   ```
-  Replace `your_public_ip_or_ddns_domain` with your public IP or Dynamic DNS domain and `<forwarded_port>` with the forwarded port number (commonly 22 for SSH).
+  Replace `your_public_ip` with your public IP and `<ssh_port>` with your configured SSH port (e.g., 11000).
 
 - **Check Port Status:**
-  Use an online port checking service like [CanYouSeeMe.org](https://canyouseeme.org/) to confirm the relevant port is open and reachable.
+  Use an online port checking service like [CanYouSeeMe.org](https://canyouseeme.org/) to confirm the relevant ports are open and reachable.
 
 **Security Considerations:**
 
@@ -354,7 +338,7 @@ polaris register
      - RAM: 32GB
      - Storage: SSD, 1TB, Read Speed: 550MB/s, Write Speed: 520MB/s
      - CPU Specs: Example CPU Model, 8 Cores, 3.2GHz
-     - Network: Internal IP - 192.168.1.100, SSH - ssh://user@0.tcp.ngrok.io:12345
+     - Network: Internal IP - 192.168.1.100, SSH - ssh://user@your_public_ip:11000
    ```
 
 2. **User Verification**
@@ -375,7 +359,7 @@ polaris register
 
    - **Commune Wallet Registration Prompt:**
 
-     Before entering your Commune wallet name, ensure that your wallet key is registered under our Polaris subnet on Commune. If you don’t have a registered Commune miner wallet, follow the instructions below to create and register one.
+     Before entering your Commune wallet name, ensure that your wallet key is registered under our Polaris subnet on Commune. If you don't have a registered Commune miner wallet, follow the instructions below to create and register one.
 
      **Sample Prompt:**
 
@@ -494,7 +478,7 @@ polaris register
 
    - **System Information Format:** Ensures all system details are correctly formatted and complete.
    - **Compute Resource Specifications:** Verifies that your compute resources meet the required specifications.
-   - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via ngrok and SSH.
+   - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via your public IP and SSH.
    - **SSH Configuration:** Checks that SSH is correctly configured and accessible.
    - **User Inputs:** Validates the accuracy and format of the entered username and Commune wallet name.
 
@@ -504,7 +488,7 @@ polaris register
    Running validation checks...
    ✔ System Information: Valid
    ✔ Compute Resources: Sufficient specifications
-   ✔ Network Connectivity: Connected via ngrok
+   ✔ Network Connectivity: Public IP accessible
    ✔ SSH Configuration: Active and accessible
    ✔ User Inputs: Username and wallet name validated
    All validation checks passed successfully.
@@ -708,7 +692,6 @@ For complete technical documentation, including API endpoints, data models, erro
 - **Python:** Version 3.6 or higher.
 - **Operating Systems:** Compatible with Windows, Linux, and macOS.
 - **Docker:** Installed and running.
-- **ngrok:** Installed and running to create secure tunnels.
 - **SSH Service:** Active and properly configured on your machine.
 - **Public IP:** Your compute node should be publicly accessible, either via a direct public IP or properly configured port forwarding.
 
@@ -722,4 +705,3 @@ Hit us up on Discord: [compute-33](https://discord.com/channels/9413623220002037
 ---
 
 *For further assistance or inquiries, please reach out to the Polaris Team.*
-```
