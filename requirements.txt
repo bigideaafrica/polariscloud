@@ -5,6 +5,7 @@ rich
 httpx
 docker
 loguru
+bittensor
 GitPython
 questionary
 python-dotenv
