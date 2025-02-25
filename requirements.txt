@@ -1,5 +1,7 @@
 requests
 pyyaml
+uvicorn
+aiohttp
 psutil
 rich
 httpx
