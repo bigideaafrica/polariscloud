@@ -14,127 +14,7 @@ A modern development workspace manager for distributed compute resources. Polari
 
 ---
 
-## Installation and Setup
-
-### 1. Clone the Repository
-
-```bash
-# Clone the Polaris repository
-git clone https://github.com/bigideainc/polaris-subnet.git
-cd polaris-subnet
-```
-
-### 2. Create and Activate a Virtual Environment
-
-It's best practice to use a Python virtual environment to isolate dependencies.
-
-#### Create the Virtual Environment
-
-```bash
-# Create a virtual environment named 'venv'
-python3 -m venv venv
-```
-
-*Note:* If your system uses `python` instead of `python3`, adjust the command accordingly:
-```bash
-python -m venv venv
-```
-
-#### Activate the Virtual Environment
-
-- **On macOS/Linux:**
-  ```bash
-  source venv/bin/activate
-  ```
-- **On Windows (Command Prompt):**
-  ```batch
-  venv\Scripts\activate.bat
-  ```
-- **On Windows (PowerShell):**
-  ```powershell
-  venv\Scripts\Activate.ps1
-  ```
-
-Once activated, your command prompt should indicate the virtual environment is active (e.g., it may start with `(venv)`).
-
-### 3. Install Dependencies
-
-Ensure you have **Python 3.6** or higher installed. With the virtual environment active, install the required dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-After install Polaris in editable mode:
-
-```bash
-pip install -e .
-```
-
-### 4. Configure SSH and Network Settings
-
-Polaris uses SSH and network port configuration for secure connections. Add your SSH and network settings to a `.env` file at the root of the project:
-
-```dotenv
-# .env file
-HOST=xx.xx.xx.xx
-API_PORT=8000
-SSH_PORT_RANGE_START=11xxx
-SSH_PORT_RANGE_END=11xx2
-SSH_PASSWORD=...
-SSH_USER=pol_user1
-SSH_HOST=xx.xx.xx.xx
-SSH_PORT=1xxxx
-SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
-```
-
-**Important Configuration Settings:**
-
-- `HOST`: Your machine's public IP address
-- `API_PORT`: Port for the API service
-- `SSH_PORT_RANGE_START` and `SSH_PORT_RANGE_END`: Range of SSH ports to use
-- `SSH_PASSWORD`: Your SSH password
-- `SSH_USER`: Your SSH username
-- `SSH_HOST`: The SSH host (usually your public IP)
-- `SSH_PORT`: The primary SSH port to use
-- `SERVER_URL`: The orchestrator server URL
-
-**Note:** The SSH password is used to configure and manage secure SSH connections between your machine and the Polaris compute network.
-
-### 5. Verify Installation
-
-Check that Polaris is installed correctly by running:
-
-```bash
-polaris --help
-```
-
-You should see output similar to:
-
-```
-Usage: polaris [OPTIONS] COMMAND [ARGS]...
-
-Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  check-main     Check if main process is running and view its logs.
-  logs           View logs without process monitoring.
-  register       Register a new miner.
-  start          Start Polaris and Compute Subnet as background processes.
-  status         Check if Polaris and Compute Subnet are running.
-  stop           Stop Polaris and Compute Subnet background processes.
-  update         Update various Polaris components.
-  view-compute   View pod compute resources.
-```
-
----
-
 ## Prerequisites
-
-Before running `polaris start`, ensure you have the following prerequisites configured:
 
 ### 1. Docker Installed and Running
 
@@ -282,6 +162,124 @@ Once configured, verify that your compute node is accessible from the internet:
 
 - **Strong Authentication:**  
   Use strong passwords, SSH keys, or other authentication methods to secure direct access to your compute node.
+
+---
+
+## Installation and Setup
+
+### 1. Clone the Repository
+
+```bash
+# Clone the Polaris repository
+git clone https://github.com/bigideainc/polaris-subnet.git
+cd polaris-subnet
+```
+
+### 2. Create and Activate a Virtual Environment
+
+It's best practice to use a Python virtual environment to isolate dependencies.
+
+#### Create the Virtual Environment
+
+```bash
+# Create a virtual environment named 'venv'
+python3 -m venv venv
+```
+
+*Note:* If your system uses `python` instead of `python3`, adjust the command accordingly:
+```bash
+python -m venv venv
+```
+
+#### Activate the Virtual Environment
+
+- **On macOS/Linux:**
+  ```bash
+  source venv/bin/activate
+  ```
+- **On Windows (Command Prompt):**
+  ```batch
+  venv\Scripts\activate.bat
+  ```
+- **On Windows (PowerShell):**
+  ```powershell
+  venv\Scripts\Activate.ps1
+  ```
+
+Once activated, your command prompt should indicate the virtual environment is active (e.g., it may start with `(venv)`).
+
+### 3. Install Dependencies
+
+Ensure you have **Python 3.6** or higher installed. With the virtual environment active, install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+After install Polaris in editable mode:
+
+```bash
+pip install -e .
+```
+
+### 4. Configure SSH and Network Settings
+
+Polaris uses SSH and network port configuration for secure connections. Add your SSH and network settings to a `.env` file at the root of the project:
+
+```dotenv
+# .env file
+HOST=xx.xx.xx.xx
+API_PORT=8000
+SSH_PORT_RANGE_START=11xxx
+SSH_PORT_RANGE_END=11xx2
+SSH_PASSWORD=...
+SSH_USER=pol_user1
+SSH_HOST=xx.xx.xx.xx
+SSH_PORT=1xxxx
+SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
+```
+
+**Important Configuration Settings:**
+
+- `HOST`: Your machine's public IP address
+- `API_PORT`: Port for the API service
+- `SSH_PORT_RANGE_START` and `SSH_PORT_RANGE_END`: Range of SSH ports to use
+- `SSH_PASSWORD`: Your SSH password
+- `SSH_USER`: Your SSH username
+- `SSH_HOST`: The SSH host (usually your public IP)
+- `SSH_PORT`: The primary SSH port to use
+- `SERVER_URL`: The orchestrator server URL
+
+**Note:** The SSH password is used to configure and manage secure SSH connections between your machine and the Polaris compute network.
+
+### 5. Verify Installation
+
+Check that Polaris is installed correctly by running:
+
+```bash
+polaris --help
+```
+
+You should see output similar to:
+
+```
+Usage: polaris [OPTIONS] COMMAND [ARGS]...
+
+Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  check-main     Check if main process is running and view its logs.
+  logs           View logs without process monitoring.
+  register       Register a new miner.
+  start          Start Polaris and Compute Subnet as background processes.
+  status         Check if Polaris and Compute Subnet are running.
+  stop           Stop Polaris and Compute Subnet background processes.
+  update         Update various Polaris components.
+  view-compute   View pod compute resources.
+```
 
 ---
 
@@ -441,58 +439,58 @@ polaris register
       Your wallet 'sample_wallet' is now registered under Polaris Compute Subnet.
       ```
 
-5. **Complete Miner Registration:**
+   5. **Complete Miner Registration:**
 
-   - **Enter Commune Wallet Name:**
+      - **Enter Commune Wallet Name:**
 
-     After successfully registering your Commune wallet, return to the Polaris registration process. Enter your Commune wallet name when prompted:
+        After successfully registering your Commune wallet, return to the Polaris registration process. Enter your Commune wallet name when prompted:
 
-     ```
-     Enter your Commune wallet name: sample_wallet
-     ```
+        ```
+        Enter your Commune wallet name: sample_wallet
+        ```
 
-   - **System Retrieves Commune UID:**
+      - **System Retrieves Commune UID:**
 
-     ```
-     Retrieving Commune UID...
-     2025-01-07 05:03:14,224 [INFO] Retrieved miner UID: 2 for wallet: sample_wallet
-     ```
+        ```
+        Retrieving Commune UID...
+        2025-01-07 05:03:14,224 [INFO] Retrieved miner UID: 2 for wallet: sample_wallet
+        ```
 
-   - **Registration Confirmation:**
+      - **Registration Confirmation:**
 
-     ```
-     Registration Complete
-     ---------------------
-     Miner ID: MINERID1234567890
-     Added Resources: CPU
-     Network: Commune
-     Wallet Name: sample_wallet
-     Commune UID: CID_SAMPLE123
+        ```
+        Registration Complete
+        ---------------------
+        Miner ID: MINERID1234567890
+        Added Resources: CPU
+        Network: Commune
+        Wallet Name: sample_wallet
+        Commune UID: CID_SAMPLE123
 
-     Important: Save your Miner ID - you'll need it to manage your compute resources.
-     ```
+        Important: Save your Miner ID - you'll need it to manage your compute resources.
+        ```
 
-6. **Validation Checks:**
+   6. **Validation Checks:**
 
-   Throughout the registration process, Polaris performs several validation checks to ensure everything is configured correctly:
+      Throughout the registration process, Polaris performs several validation checks to ensure everything is configured correctly:
 
-   - **System Information Format:** Ensures all system details are correctly formatted and complete.
-   - **Compute Resource Specifications:** Verifies that your compute resources meet the required specifications.
-   - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via your public IP and SSH.
-   - **SSH Configuration:** Checks that SSH is correctly configured and accessible.
-   - **User Inputs:** Validates the accuracy and format of the entered username and Commune wallet name.
+      - **System Information Format:** Ensures all system details are correctly formatted and complete.
+      - **Compute Resource Specifications:** Verifies that your compute resources meet the required specifications.
+      - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via your public IP and SSH.
+      - **SSH Configuration:** Checks that SSH is correctly configured and accessible.
+      - **User Inputs:** Validates the accuracy and format of the entered username and Commune wallet name.
 
-   **Sample Validation Output:**
+      **Sample Validation Output:**
 
-   ```
-   Running validation checks...
-   ✔ System Information: Valid
-   ✔ Compute Resources: Sufficient specifications
-   ✔ Network Connectivity: Public IP accessible
-   ✔ SSH Configuration: Active and accessible
-   ✔ User Inputs: Username and wallet name validated
-   All validation checks passed successfully.
-   ```
+      ```
+      Running validation checks...
+      ✔ System Information: Valid
+      ✔ Compute Resources: Sufficient specifications
+      ✔ Network Connectivity: Public IP accessible
+      ✔ SSH Configuration: Active and accessible
+      ✔ User Inputs: Username and wallet name validated
+      All validation checks passed successfully.
+      ```
 
 ---
 
