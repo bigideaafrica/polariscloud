@@ -298,31 +298,64 @@ def register_miner():
         ))
         sys.exit(1)
 
-    # Initialize network handler with Commune network
+    # Initialize network handler
     network_handler = NetworkSelectionHandler()
-    network_type = NetworkType.COMMUNE  # Force Commune network
+    
+    # Select and handle network registration
+    network_type = network_handler.select_network()
 
-    # Handle Commune network registration
-    result_commune = network_handler.handle_commune_registration()
-    if not result_commune:
+    # Handle network-specific registration
+    try:
+        if network_type == NetworkType.COMMUNE:
+            result_network = network_handler.handle_commune_registration()
+            network_credentials_key = "commune_credentials"
+            register_method = network_handler.register_commune_miner
+            verify_method = network_handler.verify_commune_status
+            network_name = "Commune"
+        elif network_type == NetworkType.BITTENSOR:
+            result_network = network_handler.handle_bittensor_registration()
+            network_credentials_key = "bittensor_credentials"
+            register_method = network_handler.register_bittensor_miner
+            verify_method = network_handler.verify_bittensor_status
+            network_name = "Bittensor"
+        else:
+            console.print(Panel(
+                "[red]Unsupported network type.[/red]",
+                title="Error",
+                border_style="red"
+            ))
+            sys.exit(1)
+
+        # Validate network registration
+        if not result_network:
+            console.print(Panel(
+                f"[red]{network_name} registration failed.[/red]",
+                title="Error",
+                border_style="red"
+            ))
+            sys.exit(1)
+
+        # Unpack network registration details
+        wallet_name, network_uid, wallet_address = result_network
+        network_credentials = {
+            "wallet_name": wallet_name,
+            f"{network_name.lower()}_uid": network_uid,
+            "wallet_address": wallet_address
+        }
+
+    except Exception as e:
         console.print(Panel(
-            "[red]Commune registration failed.[/red]",
+            f"[red]Network registration error: {str(e)}[/red]",
             title="Error",
             border_style="red"
         ))
         sys.exit(1)
-    wallet_name, commune_uid, wallet_address = result_commune
-    commune_credentials = {
-        "wallet_name": wallet_name,
-        "commune_uid": commune_uid,
-        "wallet_address": wallet_address
-    }
 
     # Prepare submission
     submission = {
         "name": username,
         "location": system_info.get("location", "N/A"),
-        "description": "Registered via Polaris CLI tool",
+        "description": f"Registered via Polaris CLI tool on {network_name} network",
         "compute_resources": []
     }
 
@@ -357,23 +390,24 @@ def register_miner():
         # Set miner_id in network handler
         network_handler.set_miner_id(result['miner_id'])
 
-        # Handle Commune network post-registration
+        # Handle network-specific post-registration
         try:
-            commune_result = network_handler.register_commune_miner(
-                wallet_name=commune_credentials["wallet_name"],
-                commune_uid=commune_credentials["commune_uid"],
-                wallet_address=commune_credentials["wallet_address"]
+            # Register on specific network
+            network_result = register_method(
+                wallet_name=network_credentials["wallet_name"],
+                **{f"{network_name.lower()}_uid": network_credentials[f"{network_name.lower()}_uid"]},
+                wallet_address=network_credentials["wallet_address"]
             )
             
-            if commune_result and commune_result.get('status') == 'success':
-                # Verify registration
-                if network_handler.verify_commune_status(result['miner_id']):
+            # Verify network registration
+            if network_result and network_result.get('status') == 'success':
+                if verify_method(result['miner_id']):
                     console.print(Panel(
-                        "[green]Successfully registered with Commune network![/green]\n"
-                        f"Wallet Name: [cyan]{commune_credentials['wallet_name']}[/cyan]\n"
-                        f"Commune UID: [cyan]{commune_credentials['commune_uid']}[/cyan]\n"
-                        f"Wallet Address: [cyan]{commune_credentials['wallet_address']}[/cyan]",
-                        title="🌐 Commune Registration Status",
+                        f"[green]Successfully registered with {network_name} network![/green]\n"
+                        f"Wallet Name: [cyan]{network_credentials['wallet_name']}[/cyan]\n"
+                        f"{network_name} UID: [cyan]{network_credentials[f'{network_name.lower()}_uid']}[/cyan]\n"
+                        f"Wallet Address: [cyan]{network_credentials['wallet_address']}[/cyan]",
+                        title=f"🌐 {network_name} Registration Status",
                         border_style="green"
                     ))
                 else:
@@ -385,102 +419,21 @@ def register_miner():
                     ))
             else:
                 console.print(Panel(
-                    "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]\n"
-                    f"Error: {commune_result.get('message') if commune_result else 'Unknown error'}\n"
-                    "You can try registering with Commune network later using your miner ID.",
+                    f"[yellow]Warning: Compute network registration successful, but {network_name} network registration failed.[/yellow]\n"
+                    f"Error: {network_result.get('message') if network_result else 'Unknown error'}\n"
+                    f"You can try registering with {network_name} network later using your miner ID.",
                     title="⚠️ Partial Registration",
                     border_style="yellow"
                 ))
                 
         except Exception as e:
             console.print(Panel(
-                "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]\n"
+                f"[yellow]Warning: Compute network registration successful, but {network_name} network registration failed.[/yellow]\n"
                 f"Error: {str(e)}\n"
-                "You can try registering with Commune network later using your miner ID.",
+                f"You can try registering with {network_name} network later using your miner ID.",
                 title="⚠️ Partial Registration",
                 border_style="yellow"
             ))
-
-def validate_compute_resources(compute_resources) -> None:
-    """
-    Validate compute resources structure and required fields.
-    
-    Args:
-        compute_resources: List or dict of compute resources
-    
-    Raises:
-        SystemExit: If validation fails
-    """
-    if not compute_resources:
-        console.print(Panel(
-            "[red]No compute resources found in system info.[/red]",
-            title="Error",
-            border_style="red"
-        ))
-        sys.exit(1)
-
-    required_fields = [
-        "id", "resource_type", "location", "hourly_price",
-        "ram", "storage.type", "storage.capacity",
-        "storage.read_speed", "storage.write_speed",
-        "cpu_specs.op_modes", "cpu_specs.total_cpus",
-        "cpu_specs.online_cpus", "cpu_specs.vendor_id",
-        "cpu_specs.cpu_name", "network.internal_ip",
-        "network.ssh", "network.password",
-        "network.username"
-    ]
-
-    def check_field(resource, field):
-        path = field.split('.')
-        value = resource
-        for key in path:
-            if not isinstance(value, dict) or key not in value:
-                return False
-            value = value[key]
-        return value is not None
-
-    for resource in (compute_resources if isinstance(compute_resources, list) else [compute_resources]):
-        missing_fields = [field for field in required_fields if not check_field(resource, field)]
-        
-        if missing_fields:
-            console.print(Panel(
-                f"[red]Missing required fields for resource {resource.get('id', 'unknown')}:[/red]\n"
-                f"{', '.join(missing_fields)}",
-                title="Validation Error",
-                border_style="red"
-            ))
-            sys.exit(1)
-
-def validate_ram_format(ram_value: str, resource_id: str) -> None:
-    """
-    Validate RAM format.
-    
-    Args:
-        ram_value: RAM value to validate
-        resource_id: ID of the resource for error reporting
-    
-    Raises:
-        SystemExit: If validation fails
-    """
-    if not isinstance(ram_value, str) or not ram_value.endswith("GB"):
-        console.print(Panel(
-            f"[red]Invalid RAM format for resource {resource_id}.[/red]\n"
-            "Expected format: '16.0GB' or similar",
-            title="Validation Error",
-            border_style="red"
-        ))
-        sys.exit(1)
-    
-    try:
-        float(ram_value[:-2])
-    except ValueError:
-        console.print(Panel(
-            f"[red]Invalid RAM value for resource {resource_id}.[/red]\n"
-            "RAM value must be a number followed by 'GB'",
-            title="Validation Error",
-            border_style="red"
-        ))
-        sys.exit(1)
 
 if __name__ == "__main__":
     register_miner()
