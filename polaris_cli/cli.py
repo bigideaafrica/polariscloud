@@ -50,7 +50,7 @@ custom_style = Style([
 
 POLARIS_HOME = Path.home() / '.polaris'
 BITTENSOR_CONFIG_PATH = POLARIS_HOME / 'bittensor'
-SERVER_ENDPOINT = "https://your-server-endpoint.com/api/miners"  # Replace with your actual endpoint
+SERVER_ENDPOINT = "https://orchestrator-gekh.onrender.com/api/v1/miners"
 
 def setup_directories():
     """Create necessary directories if they don't exist"""
