@@ -10,6 +10,9 @@ __pycache__/
 .env
 *.env
 
+# server
+compute_subnet/
+
 # Logs
 logs/
 *.log
