@@ -1,6 +1,7 @@
 README.md
 setup.py
 polaris_cli/__init__.py
+polaris_cli/bittensor_miner.py
 polaris_cli/cli.py
 polaris_cli/heartbeat_monitor.py
 polaris_cli/heartbeat_service.py

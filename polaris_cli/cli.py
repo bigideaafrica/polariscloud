@@ -12,6 +12,7 @@ from questionary import Style
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.theme import Theme
 
 from .heartbeat_monitor import monitor_heartbeat
@@ -57,6 +58,102 @@ def setup_directories():
     BITTENSOR_CONFIG_PATH.mkdir(exist_ok=True)
     (BITTENSOR_CONFIG_PATH / 'pids').mkdir(exist_ok=True)
     (BITTENSOR_CONFIG_PATH / 'logs').mkdir(exist_ok=True)
+
+def display_dashboard():
+    """Display the dashboard with fixed-width panels, matching the screenshot as closely as possible."""
+    # ASCII art for Polaris logo exactly as in screenshot
+    polaris_logo = r"""
+      ____        __            _     
+     / __ \____  / /___ _______(_)____
+    / /_/ / __ \/ / __ `/ ___/ / ___/
+   / ____/ /_/ / / /_/ / /  / (__  ) 
+  /_/    \____/_/\__,_/_/  /_/____/  
+    """
+    
+    # Header panel with logo
+    header_panel = Panel(
+        f"[cyan]{polaris_logo}[/cyan]\n"
+        "[bold white]♦ The Best Place to List Your GPUs ♦[/bold white]\n\n"
+        "[purple]Welcome to the Polaris Compute Subnet![/purple]\n\n"
+        "[bold white]♦ Our Mission is to be the Best Place on This Planet to List Your GPUs – We're just getting started! ♦[/bold white]",
+        title="[bold cyan]POLARIS SUBNET[/bold cyan]",
+        border_style="cyan",
+        box=box.ROUNDED,
+        width=100
+    )
+    console.print(header_panel, justify="center")  # Centered panel
+    
+    # "Powering GPU Computation" subtitle
+    console.print("[cyan]Powering GPU Computation[/cyan]", justify="center")  # Centered subtitle
+    
+    # Create a table to organize the sections into two columns
+    table = Table(show_header=False, show_lines=True, box=box.ROUNDED, width=150)
+    table.add_column(justify="left")
+    table.add_column(justify="left")
+    
+    # Setup Commands section
+    setup_commands = (
+        "[bold cyan]Setup Commands[/bold cyan]\n"
+        "• [bold]register[/bold] – Register as a new miner (required before starting)\n"
+        "• [bold]update subnet[/bold] – Update the Polaris repository"
+    )
+    
+    # Service Management section
+    service_management = (
+        "[bold cyan]Service Management[/bold cyan]\n"
+        "• [bold]start[/bold] – Start Polaris and selected compute processes\n"
+        "• [bold]stop[/bold] – Stop running processes\n"
+        "• [bold]status[/bold] – Check if services are running"
+    )
+    
+    # Monitoring & Logs section
+    monitoring_logs = (
+        "[bold cyan]Monitoring & Logs[/bold cyan]\n"
+        "• [bold]logs[/bold] – View logs without process monitoring\n"
+        "• [bold]monitor[/bold] – Monitor miner heartbeat signals in real-time\n"
+        "• [bold]check-main[/bold] – Check if main process is running and view its logs\n"
+        "• [bold]view-compute[/bold] – View pod compute resources"
+    )
+    
+    # Bittensor Integration section
+    bittensor_integration = (
+        "[bold cyan]Bittensor Integration[/bold cyan]\n"
+        "Polaris integrates with Bittensor to provide a decentralized compute subnet\n"
+        "• [bold]Wallet Management[/bold] – Create or use existing Bittensor wallets\n"
+        "• [bold]Validator Mode[/bold] – Run as a Bittensor subnet validator\n"
+        "• [bold]Network Registration[/bold] – Register with Bittensor network (netuid 12)\n"
+        "• [bold]Heartbeat Service[/bold] – Maintain connection with the Bittensor network"
+    )
+    
+    # Add sections to the table in two columns
+    table.add_row(setup_commands, service_management)
+    table.add_row(monitoring_logs, bittensor_integration)
+    
+    # Print the table as a panel
+    combined_panel = Panel(table, border_style="cyan", box=box.ROUNDED, width=150)
+    console.print(combined_panel, justify="center")
+    
+    # Bottom panel (Quick Start Guide) displayed separately outside the table
+    bottom_panel = Panel(
+    # "[bold cyan]Quick Start Guide[/bold cyan]\n\n"
+    "1. First register as a miner\n"
+    "2. Then start your preferred service type\n"
+    "3. Check status to verify everything is running\n"
+    "4. Use logs to monitor operation\n"
+    "5. Use stop when you want to shut down services\n\n"
+    "[bold white]Examples:[/bold white]\n"
+    "$ [magenta]polaris register[/magenta] – Register as a new miner\n"
+    "$ [magenta]polaris start[/magenta] – Start the Polaris services\n"
+    "$ [magenta]polaris status[/magenta] – Check which services are running\n"
+    "$ [magenta]polaris stop[/magenta] – Stop running services\n"
+    "$ [magenta]polaris logs[/magenta] – View service logs",
+    border_style="cyan",
+    box=box.ROUNDED,
+    width=150,
+    title="[bold cyan]Quick Start Guide[/bold cyan]",
+    title_align="center"
+    )
+    console.print(bottom_panel, justify="start")
 
 # ----------------- Bittensor Registration Flow -----------------
 def handle_bittensor_registration():
@@ -285,7 +382,7 @@ def view_pod_command():
 @cli.command()
 def start():
     """Start Polaris and selected compute processes."""
-    console.print("\n[info]Welcome to Polaris Compute Subnet![/info]")
+    # First, ask the user which mode they want to start
     mode = select_start_mode()
 
     if mode == 'validator':
@@ -295,7 +392,12 @@ def start():
             return
         wallet_name = handle_bittensor_registration()
         if wallet_name:
-            start_bittensor_miner(wallet_name)
+            if start_bittensor_miner(wallet_name):
+                console.print("[success]Bittensor miner started successfully![/success]")
+                # Display the dashboard after successful start
+                display_dashboard()
+            else:
+                console.print("[error]Failed to start Bittensor miner.[/error]")
     elif mode == 'miner':
         # Run Commune miner process.
         console.print("\n[info]Starting Commune Miner...[/info]")
@@ -306,7 +408,10 @@ def start():
             console.print("[error]Failed to start API process.[/error]")
             stop_system()
             return
-        console.print("[success]Commune miner processes started successfully.[/success]")
+        console.print("[success]Commune miner processes started successfully![/success]")
+        
+        # Display the dashboard after successful start
+        display_dashboard()
     else:
         console.print("[error]Unknown mode selected.[/error]")
 
