@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 import requests
+import time
+import readchar
 
 import click
 import questionary
@@ -58,166 +60,128 @@ def setup_directories():
     (BITTENSOR_CONFIG_PATH / 'pids').mkdir(exist_ok=True)
     (BITTENSOR_CONFIG_PATH / 'logs').mkdir(exist_ok=True)
 
-# ----------------- Bittensor Registration Flow -----------------
-def handle_bittensor_registration():
-    """
-    Handle the Bittensor wallet creation and registration process.
-    Properly validates registration success and balance requirements.
-    """
-    console.print(Panel(
-        "[cyan]Bittensor Wallet Configuration[/cyan]\n"
-        "[yellow]You'll need a wallet to participate in the Bittensor subnet[/yellow]",
-        box=box.ROUNDED,
-        title="Bittensor Setup"
-    ))
-    
-    has_wallet = questionary.confirm(
-        "Do you already have a Bittensor wallet?",
-        style=custom_style
-    ).ask()
-    
-    if has_wallet:
-        while True:
-            wallet_name = questionary.text(
-                "Enter your existing wallet name:",
-                style=custom_style
-            ).ask()
-            
-            if not wallet_name or not wallet_name.strip():
-                console.print("[error]Wallet name cannot be empty. Please enter a valid name.[/error]")
-                continue
-                
-            # Verify wallet exists
-            try:
-                result = subprocess.run(
-                    ['btcli', 'wallet', 'list'],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                if wallet_name in result.stdout:
-                    break
-                else:
-                    console.print("[error]Wallet not found. Please check the name and try again.[/error]")
-            except subprocess.CalledProcessError as e:
-                console.print(f"[error]Error checking wallet: {str(e)}[/error]")
-                return None
-    else:
-        while True:
-            wallet_name = questionary.text(
-                "Enter a name for your new wallet:",
-                style=custom_style
-            ).ask()
-            
-            if not wallet_name or not wallet_name.strip():
-                console.print("[error]Wallet name cannot be empty. Please enter a valid name.[/error]")
-                continue
-            
-            console.print("\n[info]Creating new coldkey...[/info]")
-            try:
-                # Create coldkey
-                subprocess.run([
-                    'btcli', 'wallet', 'new_coldkey',
-                    '--wallet.name', wallet_name
-                ], check=True)
-                
-                console.print("[info]Creating new hotkey...[/info]")
-                # Create hotkey
-                subprocess.run([
-                    'btcli', 'wallet', 'new_hotkey',
-                    '--wallet.name', wallet_name,
-                    '--wallet.hotkey', 'default'
-                ], check=True)
-                
-                console.print("[success]Wallet created successfully![/success]")
-                break
-            except subprocess.CalledProcessError as e:
-                console.print(f"[error]Failed to create wallet: {str(e)}[/error]")
-                return None
-    
-    # Check balance before attempting registration
+def get_wallets():
+    """Fetch and return a list of available wallet names using btcli."""
     try:
-        balance_result = subprocess.run(
-            [
-                'btcli', 'wallet', 'balance',
-                '--wallet.name', wallet_name,
-                '--subtensor.network', 'finney'
-            ],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        # Parse balance from output
-        if "Insufficient balance" in balance_result.stdout or "0.0000" in balance_result.stdout:
-            console.print("[error]Insufficient balance to register neuron.[/error]")
-            console.print("[info]Please ensure your wallet has enough TAO tokens before registering.[/info]")
-            return None
-            
-    except subprocess.CalledProcessError as e:
-        console.print(f"[error]Error checking wallet balance: {str(e)}[/error]")
-        return None
-    
-    # Register on subnet
-    console.print("\n[info]Registering on subnet (this may take a few minutes)...[/info]")
-    try:
-        registration_result = subprocess.run(
-            [
-                'btcli', 'subnet', 'register',
-                '--netuid', '12',
-                '--subtensor.network', 'finney',
-                '--wallet.name', wallet_name,
-                '--wallet.hotkey', 'default'
-            ],
+        result = subprocess.run(
+            ["btcli", "wallet", "list"],
+            check=True,
             capture_output=True,
             text=True
         )
-        
-        # Check for specific error conditions in the output
-        if "Insufficient balance" in registration_result.stdout:
-            console.print("[error]Insufficient balance to register neuron.[/error]")
-            console.print("[info]Please ensure your wallet has enough TAO tokens before registering.[/info]")
-            return None
-            
-        if registration_result.returncode != 0:
-            console.print(f"[error]Registration failed: {registration_result.stdout}[/error]")
-            return None
-            
-        if "Successfully registered" not in registration_result.stdout:
-            console.print("[error]Registration was not successful.[/error]")
-            return None
-            
-        console.print("[success]Successfully registered on subnet![/success]")
-        
-    except subprocess.CalledProcessError as e:
-        console.print(f"[error]Failed to register on subnet: {str(e)}[/error]")
+        wallets = []
+        for line in result.stdout.splitlines():
+            if "Wallet Name:" in line:
+                wallet_name = line.split("Wallet Name:")[-1].strip()
+                if wallet_name and wallet_name not in wallets:
+                    wallets.append(wallet_name)
+        return wallets
+    except subprocess.CalledProcessError:
+        console.print("[error]Failed to fetch wallet list.[/error]")
+        return []
+
+def handle_bittensor_registration():
+    """Handle Bittensor registration, ensuring wallet name is valid."""
+    console.print("\n[info]Fetching available wallets...[/info]")
+    
+    wallets = get_wallets()
+    if not wallets:
+        console.print("[error]No wallets found. Please create one using 'btcli wallet new'.[/error]")
         return None
+
+    console.print("\n[info]Available wallets:[/info]")
+    for wallet in wallets:
+        console.print(f"• {wallet}")
+
+    # Prompt user to select a wallet
+    wallet_name = questionary.select(
+        "Select your wallet:",
+        choices=wallets,
+        style=custom_style
+    ).ask()
+
+    if not wallet_name:
+        console.print("[error]Wallet selection cancelled.[/error]")
+        return None
+
+    console.print(f"[success]Selected Wallet: {wallet_name}[/success]")
+
+    # Network selection
+    console.print("\n[info]Select Bittensor network:[/info]")
+    network = questionary.select(
+        "Choose the network:",
+        choices=["mainnet (Finney)", "testnet (Local/Test)"],
+        style=custom_style
+    ).ask()
+
+    network = "finney" if "Finney" in network else "test"
+    console.print(f"[success]Using {network} network[/success]")
+
+    # Save the selected network
+    network_config_path = os.path.join(POLARIS_HOME, "network_config.json")
+    with open(network_config_path, "w") as f:
+        json.dump({"network": network}, f, indent=4)
+
+    return wallet_name, network
+
+def start_bittensor_miner(wallet_name):
+    """Start the Bittensor miner process."""
+    console.print("[info]Starting Bittensor miner process...[/info]")
     
-    # Only proceed with server registration and config if Bittensor registration succeeded
+    # Ask for netuid (subnet ID)
+    console.print("[input]Enter subnet ID (netuid) for Polaris subnet: [/input]", end="")
+    netuid = input().strip()
+    if not netuid.isdigit():
+        console.print("[error]Invalid subnet ID. Please enter a number.[/error]")
+        return
+    
+    # Get the selected network from config file if available
+    network = "finney"  # Default to mainnet
+    network_config_path = os.path.join(POLARIS_HOME, "network_config.json")
+    if os.path.exists(network_config_path):
+        try:
+            with open(network_config_path, "r") as f:
+                config = json.load(f)
+                network = config.get("network", "finney")
+        except:
+            console.print("[warning]Could not read network configuration. Using mainnet (Finney).[/warning]")
+    
+    # Create logs and pids directories if they don't exist
+    logs_dir = POLARIS_HOME / 'logs'
+    pids_dir = POLARIS_HOME / 'pids'
+    logs_dir.mkdir(exist_ok=True)
+    pids_dir.mkdir(exist_ok=True)
+    
+    # Set log files for Bittensor miner
+    log_file = logs_dir / 'bittensor_miner.log'
+    error_log = logs_dir / 'bittensor_miner_error.log'
+    
     try:
-        response = requests.post(SERVER_ENDPOINT, json={
-            'wallet_name': wallet_name,
-            'netuid': 12,
-            'status': 'registered'
-        })
-        if response.status_code == 200:
-            console.print("[success]Successfully registered with server![/success]")
-        else:
-            console.print("[warning]Failed to register with server. Continuing anyway...[/warning]")
-    except requests.RequestException:
-        console.print("[warning]Failed to register with server. Continuing anyway...[/warning]")
-    
-    # Save wallet configuration
-    config = {
-        'wallet_name': wallet_name,
-        'netuid': 12,
-        'network': 'finney'
-    }
-    with open(BITTENSOR_CONFIG_PATH / 'config.json', 'w') as f:
-        json.dump(config, f)
-    console.print("[success]Configuration saved successfully![/success]")
-    
-    return wallet_name
+        # Run as validator using btcli
+        console.print("[info]Attempting to start validator with btcli...[/info]")
+        process = subprocess.Popen(
+            [
+                'btcli', 'run', '--netuid', netuid, 
+                '--wallet.name', wallet_name, 
+                '--subtensor.network', network
+            ],
+            stdout=open(log_file, 'a'),
+            stderr=open(error_log, 'a'),
+            preexec_fn=os.setpgrp
+        )
+        
+        # Write PID to file
+        pid_file = pids_dir / 'bittensor_miner.pid'
+        with open(pid_file, 'w') as f:
+            f.write(str(process.pid))
+        
+        console.print(f"[success]Bittensor miner started successfully with btcli![/success]")
+        console.print(f"[info]Process running with PID: {process.pid}[/info]")
+        console.print(f"[info]Logs: {log_file} and {error_log}[/info]")
+        
+    except Exception as e:
+        console.print(f"[error]Failed to start Bittensor miner: {str(e)}[/error]")
+        return
 
 # ----------------- Interactive Selection Functions -----------------
 def select_start_mode():
@@ -265,16 +229,319 @@ def cli():
 
 @cli.command()
 def register():
-    """Register a new miner."""
-    reg_type = select_registration_type()
-    if "bittensor" in reg_type:
-        # For Bittensor registration, run the Bittensor registration flow.
-        wallet_name = handle_bittensor_registration()
-        if wallet_name:
-            console.print("[success]Bittensor miner registration complete.[/success]")
+    """Register to become a Polaris Compute Provider."""
+    console.print("\n[bold cyan]Register as a Polaris Compute Provider[/bold cyan]")
+    
+    # Check BT registration
+    console.print("\n[title]Bittensor Registration[/title]")
+    console.print("\n[title]Bittensor Wallet Configuration[/title]")
+    
+    # First ask if user already has a wallet
+    has_wallet = questionary.confirm(
+        "Do you already have a Bittensor wallet?",
+        style=custom_style
+    ).ask()
+    
+    wallet_name = None
+    network = "finney"  # Default network
+    
+    if has_wallet:
+        # Handle existing wallet
+        wallet_response = handle_bittensor_registration()
+        if isinstance(wallet_response, tuple) and len(wallet_response) == 2:
+            wallet_name, network = wallet_response
+        else:
+            console.print("[error]Wallet configuration failed.[/error]")
+            return
     else:
-        # For Commune registration, call the existing commune registration.
-        commune_register()
+        # Create a new wallet
+        console.print("\n[info]Creating a new Bittensor wallet...[/info]")
+        
+        # Get wallet name
+        wallet_name = questionary.text(
+            "Enter a name for your new wallet:",
+            style=custom_style
+        ).ask()
+        
+        if not wallet_name or not wallet_name.strip():
+            console.print("[error]Wallet name cannot be empty.[/error]")
+            return
+        
+        # Create the wallet
+        try:
+            subprocess.run(
+                ["btcli", "wallet", "new", "--wallet.name", wallet_name],
+                check=True
+            )
+            console.print(f"[success]Wallet '{wallet_name}' created successfully.[/success]")
+            
+            # Now prompt for network selection
+            console.print("\n[info]Select Bittensor network:[/info]")
+            network_choice = questionary.select(
+                "Choose the network:",
+                choices=["mainnet (Finney)", "testnet (Local/Test)"],
+                style=custom_style
+            ).ask()
+            
+            network = "finney" if "Finney" in network_choice else "test"
+            console.print(f"[success]Using {network} network[/success]")
+            
+            # Save network selection
+            network_config_path = os.path.join(POLARIS_HOME, "network_config.json")
+            with open(network_config_path, "w") as f:
+                json.dump({"network": network}, f, indent=4)
+        except subprocess.CalledProcessError as e:
+            console.print(f"[error]Failed to create wallet: {str(e)}[/error]")
+            return
+    
+    if not wallet_name:
+        console.print("[error]Wallet configuration failed. Exiting.[/error]")
+        return
+    
+    # Check if wallet is already registered with the subnet
+    console.print("\n[info]Checking if wallet is registered with the Bittensor network...[/info]")
+    try:
+        # Check if the wallet is already registered with the subnet
+        result = subprocess.run(
+            ['btcli', 'wallet', 'balance', '--wallet.name', wallet_name, '--subtensor.network', network],
+            capture_output=True,
+            text=True
+        )
+        
+        console.print("[success]Wallet is registered with Bittensor network.[/success]")
+        
+        # Check if we need to register with the specific subnet
+        subnet_registered = False
+        try:
+            # Ask for Polaris subnet ID
+            subnet_id = questionary.text(
+                "Enter subnet ID (netuid) for Polaris subnet:",
+                default="12",
+                style=custom_style
+            ).ask()
+            
+            if not subnet_id.isdigit():
+                console.print("[error]Invalid subnet ID. Please enter a number.[/error]")
+                return
+            
+            # Check if already registered on specific subnet
+            result = subprocess.run(
+                ['btcli', 'subnet', 'list', '--wallet.name', wallet_name, '--subtensor.network', network],
+                capture_output=True,
+                text=True
+            )
+            
+            if f"Subnet: {subnet_id}" in result.stdout and wallet_name in result.stdout:
+                console.print(f"[success]Wallet is already registered on subnet {subnet_id}.[/success]")
+                subnet_registered = True
+            else:
+                # Offer to register on the subnet
+                should_register = questionary.confirm(
+                    f"Would you like to register on Polaris subnet (netuid {subnet_id})?",
+                    style=custom_style
+                ).ask()
+                
+                if should_register:
+                    console.print("[info]Registering on Polaris subnet (this may take a few minutes)...[/info]")
+                    try:
+                        reg_result = subprocess.run(
+                            ['btcli', 'subnet', 'register', 
+                             '--netuid', subnet_id,
+                             '--wallet.name', wallet_name,
+                             '--subtensor.network', network],
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        if "Successfully registered" in reg_result.stdout:
+                            console.print("[success]Successfully registered on Polaris subnet![/success]")
+                            subnet_registered = True
+                        else:
+                            console.print(f"[warning]Registration may not have succeeded. Please check manually.[/warning]")
+                    except subprocess.CalledProcessError as e:
+                        console.print(f"[error]Failed to register on subnet: {str(e)}[/error]")
+        except Exception as e:
+            console.print(f"[warning]Could not verify subnet registration: {str(e)}[/warning]")
+    
+    except Exception as e:
+        console.print(f"[warning]Could not verify wallet registration status: {str(e)}[/warning]")
+    
+    # System Requirements Check
+    console.print("\n[title]System Requirements Check[/title]")
+    
+    # Check CPU
+    console.print("[info]Checking CPU...[/info]")
+    try:
+        if sys.platform == 'darwin':
+            # Check if we're on Apple Silicon
+            try:
+                # Try to get processor brand using sysctl
+                processor_brand = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
+                if "Apple" in processor_brand:
+                    console.print(f"[success]CPU: {processor_brand}[/success]")
+                else:
+                    # Try alternative method to detect Apple Silicon
+                    model = subprocess.check_output(['sysctl', '-n', 'hw.model']).decode().strip()
+                    if "Mac" in model:
+                        # Try to determine which Apple Silicon chip
+                        chip_info = subprocess.check_output(['sysctl', '-n', 'hw.optional.arm64']).decode().strip()
+                        if chip_info == "1":
+                            # This is definitely Apple Silicon, try to determine which one
+                            console.print(f"[success]CPU: Apple Silicon (M-series)[/success]")
+                        else:
+                            console.print(f"[success]CPU: Apple Silicon Mac[/success]")
+                    else:
+                        console.print(f"[success]CPU: {processor_brand}[/success]")
+            except:
+                # Fallback for Apple Silicon detection
+                console.print(f"[success]CPU: Apple Silicon Mac[/success]")
+        else:
+            # Non-macOS CPU detection
+            with open('/proc/cpuinfo', 'r') as f:
+                cpu_info = [line for line in f if 'model name' in line][0].split(':')[1].strip()
+            console.print(f"[success]CPU: {cpu_info}[/success]")
+    except:
+        console.print("[warning]Could not determine CPU model.[/warning]")
+    
+    # Check RAM
+    console.print("[info]Checking RAM...[/info]")
+    try:
+        import psutil
+        ram_gb = round(psutil.virtual_memory().total / (1024**3), 2)
+        console.print(f"[success]RAM: {ram_gb} GB[/success]")
+        
+        if ram_gb < 16:
+            console.print("[warning]Recommended minimum RAM is 16GB.[/warning]")
+    except:
+        console.print("[warning]Could not determine RAM size.[/warning]")
+    
+    # Check disk space
+    console.print("[info]Checking disk space...[/info]")
+    try:
+        disk_gb = round(psutil.disk_usage('/').total / (1024**3), 2)
+        console.print(f"[success]Disk space: {disk_gb} GB[/success]")
+        
+        if disk_gb < 100:
+            console.print("[warning]Recommended minimum disk space is 100GB.[/warning]")
+    except:
+        console.print("[warning]Could not determine disk space.[/warning]")
+    
+    # Check GPU(s)
+    console.print("[info]Checking GPU(s)...[/info]")
+    try:
+        # First check if we're on macOS with Apple Silicon
+        is_apple_silicon = False
+        if sys.platform == 'darwin':
+            try:
+                # Try to detect Apple Silicon
+                platform_info = subprocess.check_output(['sysctl', '-n', 'hw.model']).decode().strip()
+                processor_info = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
+                
+                if "Apple" in processor_info or "Mac" in platform_info:
+                    # Check if we can get GPU information
+                    try:
+                        gpu_info = subprocess.check_output(['system_profiler', 'SPDisplaysDataType']).decode().strip()
+                        if "Apple M" in gpu_info:
+                            console.print(f"[success]GPU: Apple Integrated GPU (Apple Silicon)[/success]")
+                        else:
+                            console.print(f"[success]GPU: Apple Integrated GPU[/success]")
+                        is_apple_silicon = True
+                    except:
+                        console.print(f"[success]GPU: Apple Integrated GPU (Apple Silicon)[/success]")
+                        is_apple_silicon = True
+            except:
+                pass
+        
+        # Fall back to nvidia-smi for NVIDIA GPUs if not Apple Silicon
+        if not is_apple_silicon:
+            gpu_info = subprocess.check_output(['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader']).decode().strip()
+            if gpu_info:
+                for line in gpu_info.split('\n'):
+                    console.print(f"[success]GPU: {line}[/success]")
+            else:
+                console.print("[warning]No NVIDIA GPU detected.[/warning]")
+    except:
+        if sys.platform == 'darwin':
+            # On macOS, assume integrated GPU
+            console.print("[success]GPU: Apple Integrated GPU[/success]")
+        else:
+            console.print("[warning]Could not detect GPU. NVIDIA tools not installed or GPU not available.[/warning]")
+    
+    # Print summary
+    console.print("\n[title]Registration Summary[/title]")
+    console.print(f"[success]Wallet: {wallet_name}[/success]")
+    console.print(f"[success]Network: {network}[/success]")
+    
+    # Confirm registration
+    proceed = questionary.confirm(
+        "Complete registration as a Polaris Compute Provider?",
+        style=custom_style
+    ).ask()
+    
+    if proceed:
+        # Start necessary services
+        console.print("\n[info]Starting Polaris services...[/info]")
+        
+        # Start the Bittensor miner with fixed subnet ID
+        try:
+            # Ask for Polaris subnet ID
+            subnet_id = questionary.text(
+                "Enter subnet ID (netuid) for Polaris subnet:",
+                default="12",
+                style=custom_style
+            ).ask()
+            
+            if not subnet_id.isdigit():
+                console.print("[error]Invalid subnet ID. Please enter a number.[/error]")
+            else:
+                # Create logs and pids directories if they don't exist
+                logs_dir = POLARIS_HOME / 'logs'
+                pids_dir = POLARIS_HOME / 'pids'
+                logs_dir.mkdir(exist_ok=True)
+                pids_dir.mkdir(exist_ok=True)
+                
+                # Set log files for Bittensor miner
+                log_file = logs_dir / 'bittensor_miner.log'
+                error_log = logs_dir / 'bittensor_miner_error.log'
+                
+                # Run as validator using btcli
+                console.print("[info]Starting Bittensor miner...[/info]")
+                process = subprocess.Popen(
+                    [
+                        'btcli', 'run', '--netuid', subnet_id, 
+                        '--wallet.name', wallet_name, 
+                        '--subtensor.network', network
+                    ],
+                    stdout=open(log_file, 'a'),
+                    stderr=open(error_log, 'a'),
+                    preexec_fn=os.setpgrp
+                )
+                
+                # Write PID to file
+                pid_file = pids_dir / 'bittensor_miner.pid'
+                with open(pid_file, 'w') as f:
+                    f.write(str(process.pid))
+                
+                console.print(f"[success]Bittensor miner started successfully with PID {process.pid}[/success]")
+                console.print(f"[info]Logs: {log_file} and {error_log}[/info]")
+        except Exception as e:
+            console.print(f"[error]Failed to start Bittensor miner: {str(e)}[/error]")
+        
+        # Start the system and API
+        start_system()
+        start_polaris()
+        
+        # Start the heartbeat service
+        start_heartbeat()
+        
+        console.print("\n[success]Registration complete! You are now registered as a Polaris Compute Provider.[/success]")
+        console.print("[info]Your node is now running and contributing to the network.[/info]")
+        
+        # Wait momentarily to allow services to start
+        time.sleep(2)
+        status()
+    else:
+        console.print("[info]Registration canceled.[/info]")
 
 @cli.command(name='view-compute')
 def view_pod_command():
@@ -374,6 +641,81 @@ def view_logs():
     else:
         from .log_monitor import monitor_process_and_logs
         monitor_process_and_logs()
+
+def start_heartbeat():
+    """Start the heartbeat service to send regular status updates to the network."""
+    try:
+        console.print("[info]Starting Heartbeat service...[/info]")
+        
+        # Create necessary directories
+        POLARIS_HOME.mkdir(exist_ok=True)
+        logs_dir = POLARIS_HOME / 'logs'
+        pids_dir = POLARIS_HOME / 'pids'
+        logs_dir.mkdir(exist_ok=True)
+        pids_dir.mkdir(exist_ok=True)
+        
+        # Set log file paths
+        log_file = logs_dir / 'heartbeat.log'
+        error_log = logs_dir / 'heartbeat_error.log'
+        
+        # Command to run the heartbeat service
+        try:
+            # Platform-specific process handling
+            if sys.platform == 'darwin':  # macOS
+                process = subprocess.Popen(
+                    ['python', '-m', 'heart_beat.main'],
+                    stdout=open(log_file, 'a'),
+                    stderr=open(error_log, 'a')
+                )
+            else:  # Linux and other platforms
+                process = subprocess.Popen(
+                    ['python', '-m', 'heart_beat.main'],
+                    stdout=open(log_file, 'a'),
+                    stderr=open(error_log, 'a'),
+                    preexec_fn=os.setpgrp
+                )
+            
+            # Store the PID
+            pid_file = pids_dir / 'heartbeat.pid'
+            with open(pid_file, 'w') as f:
+                f.write(str(process.pid))
+            
+            console.print(f"[success]Heartbeat service running on PID {process.pid}[/success]")
+            console.print(f"[info]Heartbeat logs: {log_file} and {error_log}[/info]")
+            return True
+        except FileNotFoundError:
+            # Try alternative method if heartbeat module is not found
+            try:
+                # Platform-specific process handling
+                if sys.platform == 'darwin':  # macOS
+                    process = subprocess.Popen(
+                        ['python', '-m', 'heartbeat'],
+                        stdout=open(log_file, 'a'),
+                        stderr=open(error_log, 'a')
+                    )
+                else:  # Linux and other platforms
+                    process = subprocess.Popen(
+                        ['python', '-m', 'heartbeat'],
+                        stdout=open(log_file, 'a'),
+                        stderr=open(error_log, 'a'),
+                        preexec_fn=os.setpgrp
+                    )
+                
+                # Store the PID
+                pid_file = pids_dir / 'heartbeat.pid'
+                with open(pid_file, 'w') as f:
+                    f.write(str(process.pid))
+                
+                console.print(f"[success]Heartbeat service running on PID {process.pid}[/success]")
+                console.print(f"[info]Heartbeat logs: {log_file} and {error_log}[/info]")
+                return True
+            except Exception as e:
+                console.print(f"[warning]Started Heartbeat service but couldn't determine its PID.[/warning]")
+                console.print(f"[error]Failed to get process group ID for heartbeat: {str(e)}[/error]")
+                return False
+    except Exception as e:
+        console.print(f"[error]Failed to start Heartbeat service: {str(e)}[/error]")
+        return False
 
 if __name__ == "__main__":
     cli()

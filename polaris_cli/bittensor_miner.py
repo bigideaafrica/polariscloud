@@ -1,5 +1,3 @@
-# polaris_cli/bittensor_miner.py
-
 import json
 import os
 import signal
@@ -10,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import bittensor as bt
+import questionary
 from rich.console import Console
 
 console = Console()
@@ -20,7 +19,7 @@ PID_FILE = BITTENSOR_CONFIG_PATH / 'pids' / 'miner.pid'
 LOG_FILE = BITTENSOR_CONFIG_PATH / 'logs' / 'miner.log'
 
 def load_config():
-    """Load miner configuration from file"""
+    """Load miner configuration from file."""
     try:
         with open(BITTENSOR_CONFIG_PATH / 'config.json', 'r') as f:
             return json.load(f)
@@ -32,12 +31,12 @@ def load_config():
         return None
 
 def setup_logging():
-    """Setup logging configuration"""
+    """Setup logging configuration."""
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     return LOG_FILE
 
 def get_subtensor():
-    """Initialize and return subtensor connection"""
+    """Initialize and return subtensor connection."""
     try:
         subtensor = bt.subtensor(network='finney')
         return subtensor
@@ -46,26 +45,66 @@ def get_subtensor():
         return None
 
 def write_pid(pid):
-    """Write process ID to file"""
+    """Write process ID to file."""
     PID_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PID_FILE, 'w') as f:
         f.write(str(pid))
 
 def remove_pid():
-    """Remove PID file"""
+    """Remove PID file."""
     try:
         PID_FILE.unlink()
     except FileNotFoundError:
         pass
 
 def log_message(message):
-    """Write message to log file"""
+    """Write message to log file."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(LOG_FILE, 'a') as f:
         f.write(f"[{timestamp}] {message}\n")
 
+def get_wallet_hotkeys(wallet_name):
+    """Fetch hotkeys associated with a given wallet."""
+    try:
+        result = subprocess.run(
+            ["btcli", "wallet", "list"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        hotkeys = []
+        is_target_wallet = False
+        
+        for line in result.stdout.splitlines():
+            if f"Wallet Name: {wallet_name}" in line:
+                is_target_wallet = True
+                continue
+            if is_target_wallet and "Hotkey:" in line:
+                hotkey_name = line.split("Hotkey:")[-1].strip()
+                if hotkey_name:
+                    hotkeys.append(hotkey_name)
+            if is_target_wallet and "Wallet Name:" in line:  # Next wallet section
+                break
+        
+        return hotkeys
+    except subprocess.CalledProcessError:
+        console.print(f"[error]Failed to fetch hotkeys for wallet '{wallet_name}'.[/error]")
+        return []
+
+def get_selected_network():
+    """Fetch the saved network selection."""
+    network_config_path = POLARIS_HOME / "network_config.json"
+    if network_config_path.exists():
+        try:
+            with open(network_config_path, "r") as f:
+                config = json.load(f)
+                return config.get("network", "finney")  # Default to finney if missing
+        except json.JSONDecodeError:
+            console.print("[error]Invalid network configuration file.[/error]")
+    return "finney"  # Fallback to mainnet
+
 def start_bittensor_miner(wallet_name):
-    """Start the Bittensor miner process"""
+    """Start the Bittensor miner process with correct wallet and network details."""
     if PID_FILE.exists():
         console.print("[warning]Miner process is already running.[/warning]")
         return False
@@ -73,6 +112,23 @@ def start_bittensor_miner(wallet_name):
     config = load_config()
     if not config:
         return False
+
+    # Fetch the correct hotkey(s) for the given wallet
+    hotkeys = get_wallet_hotkeys(wallet_name)
+    if not hotkeys:
+        console.print(f"[error]No hotkeys found for wallet '{wallet_name}'. Create one with 'btcli wallet new_hotkey'.[/error]")
+        return False
+
+    # Prompt user to select a hotkey if multiple exist
+    hotkey = hotkeys[0]  # Default to first if only one
+    if len(hotkeys) > 1:
+        hotkey = questionary.select(
+            "Select a hotkey to use:",
+            choices=hotkeys,
+            style=None
+        ).ask()
+
+    network = get_selected_network()
 
     log_file = setup_logging()
     
@@ -82,9 +138,9 @@ def start_bittensor_miner(wallet_name):
             [
                 'btcli', 'run',
                 '--wallet.name', wallet_name,
-                '--wallet.hotkey', 'default',
-                '--netuid', '12',
-                '--subtensor.network', 'finney',
+                '--wallet.hotkey', hotkey,
+                '--netuid', '12',  # Consider making this dynamic if needed
+                '--subtensor.network', network,
                 '--logging.debug'
             ],
             stdout=open(log_file, 'a'),
@@ -96,7 +152,7 @@ def start_bittensor_miner(wallet_name):
         write_pid(process.pid)
         
         console.print(f"[success]Started Bittensor miner (PID: {process.pid})[/success]")
-        log_message(f"Started miner process with PID {process.pid}")
+        log_message(f"Started miner process with PID {process.pid} using hotkey '{hotkey}' on network '{network}'")
         
         return True
         
@@ -106,7 +162,7 @@ def start_bittensor_miner(wallet_name):
         return False
 
 def stop_bittensor_miner():
-    """Stop the Bittensor miner process"""
+    """Stop the Bittensor miner process."""
     try:
         if not PID_FILE.exists():
             console.print("[warning]No running miner process found.[/warning]")
@@ -137,7 +193,7 @@ def stop_bittensor_miner():
         return False
 
 def check_miner_status():
-    """Check the status of the miner process"""
+    """Check the status of the miner process."""
     if not PID_FILE.exists():
         return False
         
