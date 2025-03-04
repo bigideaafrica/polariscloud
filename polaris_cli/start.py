@@ -157,7 +157,11 @@ def stop_process(pid, process_name, force=False):
         return False
 
 def stop_all(process_names):
-    """Stop all processes in the given list of process names."""
+    """Stop all processes in the given list of process names and any unicorn processes."""
+    if "unicorn" not in process_names:
+        process_names = process_names + ["unicorn"]
+        console.print("[blue]Adding unicorn to processes to stop...[/blue]")
+    
     success = True
     for name in process_names:
         pid = read_pid(name)
@@ -171,6 +175,23 @@ def stop_all(process_names):
                 success = False
                 continue
         remove_pid_file(name)
+    
+    import subprocess
+    try:
+        result = subprocess.run(["pgrep", "unicorn"], capture_output=True, text=True)
+        if result.returncode == 0:
+            unicorn_pids = result.stdout.strip().split("\n")
+            console.print(f"[yellow]Found additional unicorn processes: {unicorn_pids}[/yellow]")
+            for pid in unicorn_pids:
+                if pid.strip():
+                    console.print(f"[yellow]Attempting to stop additional unicorn process {pid}...[/yellow]")
+                    if not stop_process(int(pid), "unicorn", force=False):
+                        if not stop_process(int(pid), "unicorn", force=True):
+                            console.print(f"[red]Failed to stop unicorn process {pid}.[/red]")
+                            success = False
+    except Exception as e:
+        console.print(f"[red]Error checking for additional unicorn processes: {e}[/red]")
+    
     return success
 
 def check_status_for(process_names):
