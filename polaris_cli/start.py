@@ -157,7 +157,7 @@ def stop_process(pid, process_name, force=False):
         return False
 
 def stop_all(process_names):
-    """Stop all processes in the given list of process names and any unicorn processes."""
+    """Stop all processes in the given list of process names and any unicorn processes on port 8000."""
     if "unicorn" not in process_names:
         process_names = process_names + ["unicorn"]
         console.print("[blue]Adding unicorn to processes to stop...[/blue]")
@@ -178,19 +178,23 @@ def stop_all(process_names):
     
     import subprocess
     try:
-        result = subprocess.run(["pgrep", "unicorn"], capture_output=True, text=True)
+        # Check for unicorn processes on port 8000
+        result = subprocess.run(["lsof", "-i", ":8000", "-t"], capture_output=True, text=True)
         if result.returncode == 0:
-            unicorn_pids = result.stdout.strip().split("\n")
-            console.print(f"[yellow]Found additional unicorn processes: {unicorn_pids}[/yellow]")
-            for pid in unicorn_pids:
-                if pid.strip():
-                    console.print(f"[yellow]Attempting to stop additional unicorn process {pid}...[/yellow]")
-                    if not stop_process(int(pid), "unicorn", force=False):
-                        if not stop_process(int(pid), "unicorn", force=True):
-                            console.print(f"[red]Failed to stop unicorn process {pid}.[/red]")
-                            success = False
+            port_pids = result.stdout.strip().split("\n")
+            for port_pid in port_pids:
+                if port_pid.strip():
+                    # Verify it's a unicorn process
+                    proc_check = subprocess.run(["ps", "-p", port_pid, "-o", "comm="], capture_output=True, text=True)
+                    if "unicorn" in proc_check.stdout.lower():
+                        console.print(f"[yellow]Found unicorn process {port_pid} running on port 8000.[/yellow]")
+                        if not stop_process(int(port_pid), "unicorn", force=False):
+                            console.print(f"[yellow]Attempting forced shutdown of unicorn on port 8000...[/yellow]")
+                            if not stop_process(int(port_pid), "unicorn", force=True):
+                                console.print(f"[red]Failed to stop unicorn process {port_pid} on port 8000.[/red]")
+                                success = False
     except Exception as e:
-        console.print(f"[red]Error checking for additional unicorn processes: {e}[/red]")
+        console.print(f"[red]Error checking for unicorn processes on port 8000: {e}[/red]")
     
     return success
 
