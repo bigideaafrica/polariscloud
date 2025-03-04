@@ -1,3 +1,4 @@
+# polaris_cli/network_handler.py
 import json  # Added for JSON formatting in logs
 import logging
 import os
@@ -202,8 +203,16 @@ class NetworkSelectionHandler:
             ))
             sys.exit(0)
 
-    def handle_commune_registration(self):
-        """Handle Commune network registration process with enhanced UI."""
+    def handle_commune_registration(self, key_name=None, netuid=33):
+        """Handle Commune network registration process with enhanced UI.
+        
+        Args:
+            key_name (str, optional): Name of the Commune key to use. If None, user will be prompted.
+            netuid (int, optional): Network UID to register with. Defaults to 33 (Mainnet).
+        
+        Returns:
+            tuple: (wallet_name, commune_uid, ss58_address) if successful, None otherwise
+        """
         # Step 1: Confirm Registration as Commune Miner
         registration_panel = Panel(
             Group(
@@ -225,7 +234,7 @@ class NetworkSelectionHandler:
                 Text("Requirements:", style="cyan"),
                 Text("• Must have registered Commune key", style="white"),
                 Text(
-                    "• Key must be registered under our Polaris subnet on Commune", style="white"
+                    f"• Key must be registered under our Polaris subnet on Commune (netuid={netuid})", style="white"
                 ),
                 Text(""),
                 # Information for those without key
@@ -234,36 +243,27 @@ class NetworkSelectionHandler:
                 Text("https://communeai.org/docs/working-with-keys/key-basics",
                      style="blue underline"),
                 Text(""),
-                Text("Please enter your Commune wallet name below", style="cyan"),
-                Text(""),
-                Text.assemble(
-                    ("Note: This wallet must be registered under ", "yellow"),
-                    ("polaris miner subnet (subnet 30) ", "yellow"),
-                    ("on commune", "yellow")
-                ),
-                Text("If your key is not yet registered under our subnet, follow instructions under: ",
-                     style="yellow"),
-                Text("https://github.com/bigideainc/polaris-subnet",
-                     style="blue underline"),
-                Text("")
+                # Key information if provided
+                Text(f"Using key: {key_name}" if key_name else "Please enter your Commune wallet name below", style="cyan"),
             ),
             box=box.HEAVY,
             border_style="green",
             padding=(1, 3),
             title="[bold green]🔒 Commune Miner Registration[/bold green]",
-            subtitle="[dim]Please confirm your action[/dim]"
+            subtitle="[dim]Please confirm your details[/dim]"
         )
         self.console.print(Align.left(registration_panel))
 
-        # Get Wallet Name
-        wallet_name = Prompt.ask(
-            "\n[bold cyan]Enter your wallet name[/bold cyan]")
+        # Get Wallet Name - either use provided key_name or ask user
+        wallet_name = key_name
+        if not wallet_name:
+            wallet_name = Prompt.ask("\n[bold cyan]Enter your wallet name[/bold cyan]")
 
         if not wallet_name.strip():
             self.console.print(
                 Panel("[red]Wallet name cannot be empty.[/red]", border_style="red")
             )
-            sys.exit(1)
+            return None
 
         # Step 4: Retrieve Commune UID and SS58 Address
         try:
@@ -275,25 +275,25 @@ class NetworkSelectionHandler:
                 expand=True
             ) as progress:
                 task = progress.add_task(
-                    "[cyan]Retrieving Commune UID...", total=100
+                    f"[cyan]Retrieving Commune UID for netuid={netuid}...", total=100
                 )
 
                 key = classic_load_key(wallet_name)
                 ss58_address = key.ss58_address
-                commune_uid = self._get_commune_uid(wallet_name)
+                commune_uid = self._get_commune_uid(wallet_name, netuid)
 
                 while not progress.finished:
                     progress.update(task, advance=1)
                     sleep(0.01)
 
-            if not commune_uid or commune_uid == "Miner not found":
+            if not commune_uid:
                 self.console.print(Panel(
-                    "[red]Failed to retrieve Commune UID[/red]\n"
-                    "Please ensure your key is registered to mine Polaris subnet.",
+                    f"[red]Failed to retrieve Commune UID for netuid={netuid}[/red]\n"
+                    f"Please ensure your key '{wallet_name}' is registered to mine Polaris subnet.",
                     title="❌ Error",
                     border_style="red"
                 ))
-                sys.exit(1)
+                return None
 
             success_panel = Panel(
                 Group(
@@ -302,6 +302,9 @@ class NetworkSelectionHandler:
                     Text(f"\nCommune UID: {commune_uid}", style="cyan"),
                     Text(
                         f"Wallet Address: {ss58_address[:10]}...{ss58_address[-8:]}", style="cyan"
+                    ),
+                    Text(
+                        f"Network: {'Mainnet' if netuid == 33 else 'Testnet'} (netuid={netuid})", style="cyan"
                     ),
                 ),
                 box=box.ROUNDED,
@@ -318,7 +321,7 @@ class NetworkSelectionHandler:
                 border_style="red"
             ))
             logger.error(f"Error during Commune registration: {e}")
-            sys.exit(1)
+            return None
             
     def _get_commune_uid(self, wallet_name, netuid=33):
         """Retrieve Commune UID for the given wallet."""
@@ -328,10 +331,15 @@ class NetworkSelectionHandler:
             client = CommuneClient(commune_node_url)
             modules_keys = client.query_map_key(netuid)
             val_ss58 = key.ss58_address
-            miner_uid = next(uid for uid, address in modules_keys.items() 
-                           if address == val_ss58)
-            logger.info(f"Retrieved miner UID: {miner_uid} for wallet: {wallet_name}")
-            return miner_uid
+            miner_uid = next((uid for uid, address in modules_keys.items() 
+                           if address == val_ss58), None)
+            
+            if miner_uid is not None:
+                logger.info(f"Retrieved miner UID: {miner_uid} for wallet: {wallet_name}")
+                return miner_uid
+            else:
+                logger.error(f"Miner's SS58 address not found in the network for netuid {netuid}")
+                return None
             
         except StopIteration:
             logger.error("Miner's SS58 address not found in the network.")
@@ -339,29 +347,6 @@ class NetworkSelectionHandler:
         except Exception as e:
             logger.error(f"Error retrieving miner UID: {e}")
             return None
-
-    # def _get_commune_uid(self, wallet_name, netuid=33):
-    #     """Retrieve Commune UID for the given wallet.
-
-    #     This is a dummy implementation that returns a random UID for testing purposes.
-
-    #     Args:
-    #         wallet_name (str): Name of the wallet
-    #         netuid (int): Network UID (default: 13)
-
-    #     Returns:
-    #         int: A random miner UID between 0 and 255
-    #     """
-    #     try:
-    #         import random
-
-    #         # Generate a random UID between 0 and 255 (typical range for subnet UIDs)
-    #         random_uid = random.randint(0, 255)
-    #         logger.info(f"Retrieved random miner UID: {random_uid} for wallet: {wallet_name}")
-    #         return random_uid
-    #     except Exception as e:
-    #         logger.error(f"Error retrieving miner UID: {e}")
-    #         return None
 
     def get_created_miner_id(self) -> str:
         """Get the miner ID that was created during the compute registration process."""
@@ -425,15 +410,12 @@ Thank you for joining us! 🌟
                 'commune_uid': str(commune_uid),
                 'wallet_name': wallet_name,
                 'wallet_address': wallet_address,
-                'netuid': 13
+                'netuid': 33  # Using Mainnet as default
             }
 
             # Mask sensitive information before logging
             masked_wallet_address = f"{wallet_address[:10]}...{wallet_address[-8:]}"
             masked_payload = {**payload, 'wallet_address': masked_wallet_address}
-
-            # Log the payload (excluding sensitive info)
-            # logger.info(f"Register Commune Miner payload: {json.dumps(masked_payload, indent=2)}")
 
             with Progress(
                 SpinnerColumn(),
@@ -652,11 +634,3 @@ Thank you for joining us! 🌟
                 border_style="red"
             ))
             logger.error(f"Unexpected error in registration flow: {e}")
-
-
-# Example usage:
-# if __name__ == "__main__":
-#     handler = NetworkSelectionHandler()
-#     # Example of setting miner ID; in real usage, this should come from compute registration
-#     handler.set_miner_id("miner12345")
-#     handler.run_registration_flow()

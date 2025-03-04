@@ -1,4 +1,3 @@
-# polaris_cli/cli.py
 import json
 import os
 import subprocess
@@ -21,10 +20,8 @@ from .repo_manager import update_repository
 from .start import (check_status, start_polaris, start_system, stop_polaris,
                     stop_system)
 from .bittensor_miner import start_bittensor_miner, stop_bittensor_miner, is_bittensor_running
-# For Commune registration we import the existing function from register.py
-from .register import register_miner as commune_register
+from .register import load_system_info, display_system_info, register_miner as commune_register, register_independent_miner
 
-# Create a custom theme for rich console
 custom_theme = Theme({
     "info": "cyan",
     "warning": "yellow",
@@ -34,7 +31,6 @@ custom_theme = Theme({
 
 console = Console(theme=custom_theme)
 
-# Custom style for questionary
 custom_style = Style([
     ('qmark', 'fg:#ff9d00 bold'),
     ('question', 'bold'),
@@ -61,7 +57,6 @@ def setup_directories():
 
 def display_dashboard():
     """Display the dashboard with fixed-width panels, matching the screenshot as closely as possible."""
-    # ASCII art for Polaris logo exactly as in screenshot
     polaris_logo = r"""
       ____        __            _     
      / __ \____  / /___ _______(_)____
@@ -69,8 +64,6 @@ def display_dashboard():
    / ____/ /_/ / / /_/ / /  / (__  ) 
   /_/    \____/_/\__,_/_/  /_/____/  
     """
-    
-    # Header panel with logo
     header_panel = Panel(
         f"[cyan]{polaris_logo}[/cyan]\n"
         "[bold white]♦ The Best Place to List Your GPUs ♦[/bold white]\n\n"
@@ -81,32 +74,22 @@ def display_dashboard():
         box=box.ROUNDED,
         width=100
     )
-    console.print(header_panel, justify="center")  # Centered panel
-    
-    # "Powering GPU Computation" subtitle
-    console.print("[cyan]Powering GPU Computation[/cyan]", justify="center")  # Centered subtitle
-    
-    # Create a table to organize the sections into two columns
+    console.print(header_panel, justify="center")
+    console.print("[cyan]Powering GPU Computation[/cyan]", justify="center")
     table = Table(show_header=False, show_lines=True, box=box.ROUNDED, width=150)
     table.add_column(justify="left")
     table.add_column(justify="left")
-    
-    # Setup Commands section
     setup_commands = (
         "[bold cyan]Setup Commands[/bold cyan]\n"
         "• [bold]register[/bold] – Register as a new miner (required before starting)\n"
         "• [bold]update subnet[/bold] – Update the Polaris repository"
     )
-    
-    # Service Management section
     service_management = (
         "[bold cyan]Service Management[/bold cyan]\n"
         "• [bold]start[/bold] – Start Polaris and selected compute processes\n"
         "• [bold]stop[/bold] – Stop running processes\n"
         "• [bold]status[/bold] – Check if services are running"
     )
-    
-    # Monitoring & Logs section
     monitoring_logs = (
         "[bold cyan]Monitoring & Logs[/bold cyan]\n"
         "• [bold]logs[/bold] – View logs without process monitoring\n"
@@ -114,8 +97,6 @@ def display_dashboard():
         "• [bold]check-main[/bold] – Check if main process is running and view its logs\n"
         "• [bold]view-compute[/bold] – View pod compute resources"
     )
-    
-    # Bittensor Integration section
     bittensor_integration = (
         "[bold cyan]Bittensor Integration[/bold cyan]\n"
         "Polaris integrates with Bittensor to provide a decentralized compute subnet\n"
@@ -124,18 +105,11 @@ def display_dashboard():
         "• [bold]Network Registration[/bold] – Register with Bittensor network (netuid 12)\n"
         "• [bold]Heartbeat Service[/bold] – Maintain connection with the Bittensor network"
     )
-    
-    # Add sections to the table in two columns
     table.add_row(setup_commands, service_management)
     table.add_row(monitoring_logs, bittensor_integration)
-    
-    # Print the table as a panel
     combined_panel = Panel(table, border_style="cyan", box=box.ROUNDED, width=150)
     console.print(combined_panel, justify="center")
-    
-    # Bottom panel (Quick Start Guide) displayed separately outside the table
     bottom_panel = Panel(
-    # "[bold cyan]Quick Start Guide[/bold cyan]\n\n"
     "1. First register as a miner\n"
     "2. Then start your preferred service type\n"
     "3. Check status to verify everything is running\n"
@@ -155,174 +129,267 @@ def display_dashboard():
     )
     console.print(bottom_panel, justify="start")
 
-# ----------------- Bittensor Registration Flow -----------------
+def setup_directories():
+    POLARIS_HOME.mkdir(exist_ok=True)
+    BITTENSOR_CONFIG_PATH.mkdir(exist_ok=True)
+    (BITTENSOR_CONFIG_PATH / 'pids').mkdir(exist_ok=True)
+    (BITTENSOR_CONFIG_PATH / 'logs').mkdir(exist_ok=True)
+
+def display_registration_summary(wallet_name, hotkey, network_name, netuid):
+    console.print(Panel(
+        f"[cyan]Registration Summary[/cyan]\n\n"
+        f"Wallet: [bold green]{wallet_name}[/bold green]\n"
+        f"Hotkey: [bold green]{hotkey}[/bold green]\n"
+        f"Network: [bold green]{network_name} (netuid {netuid})[/bold green]\n\n"
+        "[yellow]Proceeding to start Polaris services...[/yellow]",
+        title="✅ Registration Complete",
+        border_style="green"
+    ))
+
+def select_registration_type():
+    choices = [
+        'Commune Miner Node',
+        'Bittensor Miner Node',
+        'Polaris Miner Node (Coming Soon)',
+        'Independent Miner'
+    ]
+    answer = questionary.select(
+        "Select registration type:",
+        choices=choices,
+        style=custom_style,
+        qmark="🔑"
+    ).ask()
+    return answer.lower() if answer else ""
+
+@click.group()
+def cli():
+    setup_directories()
+    pass
+
+@cli.command()
+def register():
+    from src.user_manager import UserManager
+    user_manager = UserManager()
+    skip_registration, user_info = user_manager.check_existing_registration(show_prompt=True)
+    if skip_registration:
+        console.print("[yellow]Using existing registration.[/yellow]")
+        return
+    reg_type = select_registration_type()
+    if "bittensor" in reg_type:
+        handle_bittensor_registration()
+    elif "commune" in reg_type:
+        commune_register(skip_existing_check=True)
+    elif "polaris" in reg_type:
+        console.print(Panel(
+            "[yellow]Polaris Miner Node is coming soon![/yellow]",
+            title="🚧 Coming Soon",
+            border_style="yellow"
+        ))
+    elif "independent" in reg_type:
+        register_independent_miner(skip_existing_check=True)
+    else:
+        console.print("[error]Invalid registration type selected.[/error]")
+
 def handle_bittensor_registration():
-    """
-    Handle the Bittensor wallet creation and registration process.
-    Properly validates registration success and balance requirements.
-    """
     console.print(Panel(
         "[cyan]Bittensor Wallet Configuration[/cyan]\n"
         "[yellow]You'll need a wallet to participate in the Bittensor subnet[/yellow]",
         box=box.ROUNDED,
         title="Bittensor Setup"
     ))
-    
+
+    # Check if user already has a wallet
     has_wallet = questionary.confirm(
         "Do you already have a Bittensor wallet?",
         style=custom_style
     ).ask()
-    
+
     if has_wallet:
-        while True:
-            wallet_name = questionary.text(
-                "Enter your existing wallet name:",
-                style=custom_style
-            ).ask()
+        try:
+            result = subprocess.run(
+                ['btcli', 'wallet', 'list'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            wallets = parse_wallet_list(result.stdout)
             
-            if not wallet_name or not wallet_name.strip():
-                console.print("[error]Wallet name cannot be empty. Please enter a valid name.[/error]")
-                continue
+            if not wallets:
+                console.print("[error]No wallets found. Please create a new wallet.[/error]")
+                selected_wallet_name = create_new_wallet()
+                if not selected_wallet_name:
+                    return  # Stop execution
+            
+            else:
+                wallet_names = list(wallets.keys())
+                selected_wallet_name = questionary.select(
+                    "Select your wallet (cold key):",
+                    choices=wallet_names,
+                    style=custom_style
+                ).ask()
                 
-            # Verify wallet exists
-            try:
-                result = subprocess.run(
-                    ['btcli', 'wallet', 'list'],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                if wallet_name in result.stdout:
-                    break
-                else:
-                    console.print("[error]Wallet not found. Please check the name and try again.[/error]")
-            except subprocess.CalledProcessError as e:
-                console.print(f"[error]Error checking wallet: {str(e)}[/error]")
-                return None
+                if not selected_wallet_name:
+                    console.print("[error]No wallet selected. Exiting.[/error]")
+                    return  # Stop execution
+                
+                hotkeys = wallets[selected_wallet_name]
+                selected_hotkey = questionary.select(
+                    "Select a hotkey:",
+                    choices=hotkeys,
+                    style=custom_style
+                ).ask()
+                
+                if not selected_hotkey:
+                    console.print("[error]No hotkey selected. Exiting.[/error]")
+                    return  # Stop execution
+                
+        except subprocess.CalledProcessError as e:
+            console.print(f"[error]Error listing wallets: {str(e)}[/error]")
+            return  # Stop execution
+
     else:
-        while True:
-            wallet_name = questionary.text(
-                "Enter a name for your new wallet:",
-                style=custom_style
-            ).ask()
-            
-            if not wallet_name or not wallet_name.strip():
-                console.print("[error]Wallet name cannot be empty. Please enter a valid name.[/error]")
-                continue
-            
-            console.print("\n[info]Creating new coldkey...[/info]")
-            try:
-                # Create coldkey
-                subprocess.run([
-                    'btcli', 'wallet', 'new_coldkey',
-                    '--wallet.name', wallet_name
-                ], check=True)
-                
-                console.print("[info]Creating new hotkey...[/info]")
-                # Create hotkey
-                subprocess.run([
-                    'btcli', 'wallet', 'new_hotkey',
-                    '--wallet.name', wallet_name,
-                    '--wallet.hotkey', 'default'
-                ], check=True)
-                
-                console.print("[success]Wallet created successfully![/success]")
-                break
-            except subprocess.CalledProcessError as e:
-                console.print(f"[error]Failed to create wallet: {str(e)}[/error]")
-                return None
+        selected_wallet_name = create_new_wallet()
+        if not selected_wallet_name:
+            return  # Stop execution
+        selected_hotkey = "default"
+
+    # Select the network
+    network_choice = questionary.select(
+        "Select the network to register on:",
+        choices=["Mainnet (netuid 100)", "Testnet (netuid 12)"],
+        style=custom_style
+    ).ask()
     
-    # Check balance before attempting registration
-    try:
-        balance_result = subprocess.run(
-            [
-                'btcli', 'wallet', 'balance',
+    if not network_choice:
+        console.print("[error]No network selected. Exiting.[/error]")
+        return  # Stop execution
+
+    netuid = 100 if "Mainnet" in network_choice else 12
+    network_name = "Mainnet" if netuid == 100 else "Testnet"
+
+    console.print(Panel(
+        f"[cyan]Registering on {network_name} (netuid {netuid})[/cyan]\n"
+        "[yellow]This may take a few minutes...[/yellow]",
+        box=box.ROUNDED,
+        title="Network Registration"
+    ))
+
+    # Attempt registration
+    wallet, message = register_wallet(selected_wallet_name, selected_hotkey, netuid)
+
+    if not wallet:
+        console.print(f"[error]Registration failed: {message}[/error]")
+        console.print("[red]Stopping execution.[/red]")
+        return  # Stop execution immediately
+
+    # Load system info only if registration was successful
+    system_info = load_system_info()
+    if system_info:
+        display_system_info(system_info)
+        display_registration_summary(selected_wallet_name, selected_hotkey, network_name, netuid)
+
+        # Start Polaris only if registration succeeded
+        if start_polaris():
+            console.print("[success]Polaris services started successfully![/success]")
+        else:
+            console.print("[error]Failed to start Polaris services.[/error]")
+
+def parse_wallet_list(wallet_list_output):
+    wallets = {}
+    current_wallet = None
+    for line in wallet_list_output.splitlines():
+        line = line.strip()
+        if not line or line == "Wallets":
+            continue
+        if "Coldkey" in line:
+            parts = line.split("Coldkey")
+            if len(parts) > 1:
+                parts = parts[1].strip().split()
+                if parts:
+                    wallet_name = parts[0]
+                    current_wallet = wallet_name
+                    wallets[current_wallet] = []
+        elif "Hotkey" in line and current_wallet:
+            parts = line.split("Hotkey")
+            if len(parts) > 1:
+                parts = parts[1].strip().split()
+                if parts:
+                    hotkey_name = parts[0]
+                    wallets[current_wallet].append(hotkey_name)
+    return wallets
+
+def create_new_wallet():
+    console.print(Panel(
+        "[cyan]Creating a New Bittensor Wallet[/cyan]\n"
+        "[yellow]You will need to provide a name for your new wallet.[/yellow]",
+        box=box.ROUNDED,
+        title="Wallet Creation"
+    ))
+    while True:
+        wallet_name = questionary.text(
+            "Enter a name for your new wallet:",
+            style=custom_style
+        ).ask()
+        if not wallet_name or not wallet_name.strip():
+            console.print("[error]Wallet name cannot be empty. Please enter a valid name.[/error]")
+            continue
+        console.print("\n[info]Creating new coldkey...[/info]")
+        try:
+            subprocess.run([
+                'btcli', 'wallet', 'new_coldkey',
+                '--wallet.name', wallet_name
+            ], check=True)
+            console.print("[info]Creating new hotkey...[/info]")
+            subprocess.run([
+                'btcli', 'wallet', 'new_hotkey',
                 '--wallet.name', wallet_name,
-                '--subtensor.network', 'finney'
-            ],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        # Parse balance from output
-        if "Insufficient balance" in balance_result.stdout or "0.0000" in balance_result.stdout:
-            console.print("[error]Insufficient balance to register neuron.[/error]")
-            console.print("[info]Please ensure your wallet has enough TAO tokens before registering.[/info]")
+                '--wallet.hotkey', 'default'
+            ], check=True)
+            console.print("[success]Wallet created successfully![/success]")
+            return wallet_name
+        except subprocess.CalledProcessError as e:
+            console.print(f"[error]Failed to create wallet: {str(e)}[/error]")
             return None
-            
-    except subprocess.CalledProcessError as e:
-        console.print(f"[error]Error checking wallet balance: {str(e)}[/error]")
-        return None
-    
-    # Register on subnet
-    console.print("\n[info]Registering on subnet (this may take a few minutes)...[/info]")
+
+def register_wallet(wallet_name, hotkey, netuid):
+    network = "finney" if netuid == 100 else "local"
+    network_name = "Mainnet" if netuid == 100 else "Testnet"
+
+    console.print(f"\n[info]Registering on {network_name} subnet (netuid={netuid}) (this may take a few minutes)...[/info]")
+
     try:
         registration_result = subprocess.run(
             [
                 'btcli', 'subnet', 'register',
-                '--netuid', '12',
-                '--subtensor.network', 'finney',
+                '--netuid', str(netuid),
+                '--subtensor.network', network,
                 '--wallet.name', wallet_name,
-                '--wallet.hotkey', 'default'
+                '--wallet.hotkey', hotkey
             ],
             capture_output=True,
             text=True
         )
-        
-        # Check for specific error conditions in the output
+
         if "Insufficient balance" in registration_result.stdout:
             console.print("[error]Insufficient balance to register neuron.[/error]")
-            console.print("[info]Please ensure your wallet has enough TAO tokens before registering.[/info]")
-            return None
-            
+            return None, "Insufficient balance"
+
         if registration_result.returncode != 0:
             console.print(f"[error]Registration failed: {registration_result.stdout}[/error]")
-            return None
-            
+            return None, registration_result.stdout  # STOP HERE
+
         if "Successfully registered" not in registration_result.stdout:
             console.print("[error]Registration was not successful.[/error]")
-            return None
-            
+            return None, registration_result.stdout  # STOP HERE
+
         console.print("[success]Successfully registered on subnet![/success]")
-        
+        return wallet_name, "Success"
+
     except subprocess.CalledProcessError as e:
         console.print(f"[error]Failed to register on subnet: {str(e)}[/error]")
-        return None
-    
-    # Only proceed with server registration and config if Bittensor registration succeeded
-    try:
-        response = requests.post(SERVER_ENDPOINT, json={
-            'wallet_name': wallet_name,
-            'netuid': 12,
-            'status': 'registered'
-        })
-        if response.status_code == 200:
-            console.print("[success]Successfully registered with server![/success]")
-        else:
-            console.print("[warning]Failed to register with server. Continuing anyway...[/warning]")
-    except requests.RequestException:
-        console.print("[warning]Failed to register with server. Continuing anyway...[/warning]")
-    
-    # Save wallet configuration
-    config = {
-        'wallet_name': wallet_name,
-        'netuid': 12,
-        'network': 'finney'
-    }
-    with open(BITTENSOR_CONFIG_PATH / 'config.json', 'w') as f:
-        json.dump(config, f)
-    console.print("[success]Configuration saved successfully![/success]")
-    
-    return wallet_name
+        return None, str(e)  # STOP HERE
 
-# ----------------- Interactive Selection Functions -----------------
 def select_start_mode():
-    """
-    Interactive selection for 'polaris start' with two options:
-    - Miner (Commune miner process)
-    - Validator (Bittensor miner process)
-    """
     choices = [
         'Miner',
         'Validator'
@@ -335,58 +402,10 @@ def select_start_mode():
     ).ask()
     return answer.lower() if answer else ""
 
-def select_registration_type():
-    """
-    Interactive selection for 'polaris register' with two options:
-    - Commune Miner Node
-    - Bittensor Miner Node
-    """
-    choices = [
-        'Commune Miner Node',
-        'Bittensor Miner Node'
-    ]
-    answer = questionary.select(
-        "Select registration type:",
-        choices=choices,
-        style=custom_style,
-        qmark="🔑"
-    ).ask()
-    return answer.lower() if answer else ""
-
-# ----------------- CLI Commands -----------------
-@click.group()
-def cli():
-    """Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources"""
-    setup_directories()
-    pass
-
-@cli.command()
-def register():
-    """Register a new miner."""
-    reg_type = select_registration_type()
-    if "bittensor" in reg_type:
-        # For Bittensor registration, run the Bittensor registration flow.
-        wallet_name = handle_bittensor_registration()
-        if wallet_name:
-            console.print("[success]Bittensor miner registration complete.[/success]")
-    else:
-        # For Commune registration, call the existing commune registration.
-        commune_register()
-
-@cli.command(name='view-compute')
-def view_pod_command():
-    """View pod compute resources."""
-    from .view_pod import view_pod
-    view_pod()
-
 @cli.command()
 def start():
-    """Start Polaris and selected compute processes."""
-    # First, ask the user which mode they want to start
     mode = select_start_mode()
-
     if mode == 'validator':
-        # Run Bittensor miner process for Validator mode.
         if is_bittensor_running():
             console.print("[warning]Bittensor miner is already running.[/warning]")
             return
@@ -394,12 +413,10 @@ def start():
         if wallet_name:
             if start_bittensor_miner(wallet_name):
                 console.print("[success]Bittensor miner started successfully![/success]")
-                # Display the dashboard after successful start
                 display_dashboard()
             else:
                 console.print("[error]Failed to start Bittensor miner.[/error]")
     elif mode == 'miner':
-        # Run Commune miner process.
         console.print("\n[info]Starting Commune Miner...[/info]")
         if not start_system():
             console.print("[error]Failed to start system process.[/error]")
@@ -409,15 +426,12 @@ def start():
             stop_system()
             return
         console.print("[success]Commune miner processes started successfully![/success]")
-        
-        # Display the dashboard after successful start
         display_dashboard()
     else:
         console.print("[error]Unknown mode selected.[/error]")
 
 @cli.command()
 def stop():
-    """Stop running processes."""
     if is_bittensor_running():
         if stop_bittensor_miner():
             console.print("[success]Bittensor miner stopped successfully.[/success]")
@@ -425,13 +439,12 @@ def stop():
             console.print("[error]Failed to stop Bittensor miner.[/error]")
     else:
         if stop_polaris():
-            console.print("[success]Commune miner processes stopped successfully.[/success]")
+            console.print("[success]Commune miner processes stopped successfully![/success]")
         else:
             console.print("[error]Failed to stop miner processes.[/error]")
 
 @cli.command(name='status')
 def status():
-    """Check process status."""
     if is_bittensor_running():
         if (BITTENSOR_CONFIG_PATH / 'pids' / 'miner.pid').exists():
             console.print("[success]Bittensor miner is running.[/success]")
@@ -442,17 +455,14 @@ def status():
 
 @cli.command(name='monitor')
 def monitor():
-    """Monitor miner heartbeat signals in real-time."""
     monitor_heartbeat()
 
 @cli.group(name='update')
 def update():
-    """Update various Polaris components."""
     pass
 
 @update.command(name='subnet')
 def update_subnet():
-    """Update the Polaris repository."""
     if update_repository():
         console.print("[success]Repository update completed successfully.[/success]")
     else:
@@ -461,12 +471,10 @@ def update_subnet():
 
 @cli.command(name='check-main')
 def check_main_command():
-    """Check if main process is running and view its logs."""
     check_main()
 
 @cli.command(name='logs')
 def view_logs():
-    """View logs for the running process."""
     if is_bittensor_running():
         log_file = BITTENSOR_CONFIG_PATH / 'logs' / 'miner.log'
         if not log_file.exists():
