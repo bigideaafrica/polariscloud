@@ -58,4 +58,4 @@ docs/.scraper_cache.json
 
 # Temporary files
 tmp/
-temp/ 
+temp/ venv_py3.12/

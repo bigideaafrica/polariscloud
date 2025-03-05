@@ -62,8 +62,29 @@ source venv/bin/activate
 # Install dependencies
 echo -e "\n${YELLOW}Installing dependencies...${NC}"
 pip install --upgrade pip
-pip install -r requirements.txt
-echo -e "${GREEN}Dependencies installed.${NC}"
+
+# Try to install from requirements.txt, fallback to dependency_files if needed
+if [ -f "requirements.txt" ]; then
+    if pip install -r requirements.txt; then
+        echo -e "${GREEN}Dependencies installed from requirements.txt.${NC}"
+    else
+        echo -e "${YELLOW}Failed to install from requirements.txt. Trying alternative locations...${NC}"
+        if [ -f "dependency_files/production.txt" ]; then
+            pip install -r dependency_files/production.txt
+            echo -e "${GREEN}Dependencies installed from dependency_files/production.txt.${NC}"
+        else
+            echo -e "${RED}Could not find dependency files. Installing directly from setup.py...${NC}"
+        fi
+    fi
+else
+    echo -e "${YELLOW}requirements.txt not found. Trying alternative locations...${NC}"
+    if [ -f "dependency_files/production.txt" ]; then
+        pip install -r dependency_files/production.txt
+        echo -e "${GREEN}Dependencies installed from dependency_files/production.txt.${NC}"
+    else
+        echo -e "${RED}Could not find dependency files. Installing directly from setup.py...${NC}"
+    fi
+fi
 
 # Install the package
 echo -e "\n${YELLOW}Installing Polaris Subnet...${NC}"
