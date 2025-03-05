@@ -399,6 +399,11 @@ def register_miner(skip_existing_check=False):
         miner_id = result['miner_id']
         console.print(f"[green]Miner ID: {miner_id}[/green]")
 
+        # Initialize NetworkSelectionHandler here
+        network_handler = NetworkSelectionHandler()
+        # Set the miner ID
+        network_handler.set_miner_id(miner_id)
+
         # Register with Commune network
         commune_result = network_handler.register_commune_miner(
             wallet_name=selected_key,
@@ -424,6 +429,165 @@ def register_miner(skip_existing_check=False):
             title="❌ Commune Registration Error",
             border_style="red"
         ))
+
+# def register_miner(skip_existing_check=False):
+#     user_manager = UserManager()
+#     if not skip_existing_check:
+#         skip_registration, user_info = user_manager.check_existing_registration()
+#         if skip_registration:
+#             console.print("[yellow]Using existing registration.[/yellow]")
+#             return
+
+#     # Check if the user has an existing Commune key
+#     has_commune_key = questionary.confirm("Do you have an existing Commune key?", default=True).ask()
+#     if has_commune_key:
+#         result_keys = subprocess.run(["comx", "key", "list"], capture_output=True, text=True)
+#         if result_keys.returncode != 0 or not result_keys.stdout.strip():
+#             console.print("[yellow]No existing keys found. You will need to create one.[/yellow]")
+#             has_commune_key = False
+#         else:
+#             console.print(Panel(
+#                 f"Available keys:\n\n{result_keys.stdout}",
+#                 title="Your Commune Keys",
+#                 border_style="cyan"
+#             ))
+#             selected_key = Prompt.ask("Enter the name of the key you want to use")
+#             if not selected_key:
+#                 console.print("[yellow]No key provided. You will need to create a new key.[/yellow]")
+#                 has_commune_key = False
+
+#     # Create a new Commune key if needed
+#     if not has_commune_key:
+#         selected_key = Prompt.ask("Enter a name for your new Commune key")
+#         create_result = subprocess.run(["comx", "key", "create", selected_key], capture_output=True, text=True)
+#         if create_result.returncode != 0:
+#             console.print(Panel(f"[red]Failed to create key: {create_result.stderr}[/red]", border_style="red"))
+#             return
+#         console.print(f"[green]Key {selected_key} created successfully.[/green]")
+
+#     # Check Commune balance
+#     balance, is_sufficient = check_commune_balance(selected_key, 10)
+#     if not is_sufficient:
+#         console.print(Panel(
+#             f"[yellow]WARNING: Your current balance is {balance} COMAI.[/yellow]\n"
+#             "[yellow]A minimum of 10 COMAI is recommended for registration.[/yellow]\n"
+#             "[yellow]You may proceed, but some network features might be limited.[/yellow]",
+#             title="⚠️ Low Balance Warning",
+#             border_style="yellow"
+#         ))
+
+#     # Select network
+#     console.print(Panel(
+#         "Available networks:\n1. Mainnet (netuid=33)\n2. Testnet (netuid=12)",
+#         title="Network Selection",
+#         border_style="cyan"
+#     ))
+#     network_choice = Prompt.ask(
+#         "Select network (enter 1 for Mainnet or 2 for Testnet)",
+#         choices=["1", "2"],
+#         default="1"
+#     )
+#     netuid = 33 if network_choice == "1" else 12
+#     network_name = "Mainnet" if network_choice == "1" else "Testnet"
+#     console.print(f"[green]Selected network: {network_name} (netuid={netuid})[/green]")
+
+#     # Attempt Commune subnet registration
+#     try:
+#         from communex.client import CommuneClient
+#         from communex.compat.key import classic_load_key
+#         key = classic_load_key(selected_key)
+#         ss58_address = key.ss58_address
+#         commune_node_url = "wss://api.communeai.net/"
+#         client = CommuneClient(commune_node_url)
+#         modules_keys = client.query_map_key(netuid)
+#         commune_uid = next((uid for uid, address in modules_keys.items() if address == ss58_address), None)
+
+#         if not commune_uid:
+#             console.print(Panel(
+#                 f"[red]Failed to retrieve Commune UID for key '{selected_key}' on network {network_name} (netuid={netuid}).[/red]\n"
+#                 "[red]Key may not be registered on the Polaris subnet.[/red]\n\n"
+#                 "Registration process stopped.",
+#                 title="❌ Commune Registration Failed",
+#                 border_style="red"
+#             ))
+#             return  # Stop the process if Commune subnet registration fails
+
+#         # Only proceed with username and system info if subnet registration is successful
+#         username = Prompt.ask("Enter your desired username", default="")
+#         if not username:
+#             console.print(Panel(
+#                 "[red]Username is required for registration.[/red]",
+#                 title="Error",
+#                 border_style="red"
+#             ))
+#             return
+
+#         # Load and display system info
+#         system_info = load_system_info()
+#         display_system_info(system_info)
+
+#         # Prepare submission data
+#         submission = {
+#             "name": username,
+#             "location": system_info.get("location", "N/A"),
+#             "description": "Registered via Polaris CLI tool",
+#             "compute_resources": []
+#         }
+
+#         # Process compute resources
+#         compute_resources = system_info.get("compute_resources", [])
+#         if isinstance(compute_resources, dict):
+#             compute_resources = [compute_resources]
+#         for resource in compute_resources:
+#             try:
+#                 processed_resource = process_compute_resource(resource)
+#                 submission["compute_resources"].append(processed_resource)
+#             except Exception as e:
+#                 console.print(Panel(
+#                     f"[red]Error processing compute resource:[/red]\n{str(e)}",
+#                     title="Error",
+#                     border_style="red"
+#                 ))
+#                 return
+
+#         # Submit registration to your server
+#         result = submit_registration(submission)
+#         if not result.get('miner_id'):
+#             console.print(Panel(
+#                 "[red]Compute registration failed. Unable to proceed with Commune registration.[/red]",
+#                 title="❌ Registration Error",
+#                 border_style="red"
+#             ))
+#             return
+
+#         miner_id = result['miner_id']
+#         console.print(f"[green]Miner ID: {miner_id}[/green]")
+
+#         # Register with Commune network
+#         commune_result = network_handler.register_commune_miner(
+#             wallet_name=selected_key,
+#             commune_uid=commune_uid,
+#             wallet_address=ss58_address
+#         )
+#         if commune_result and commune_result.get('status') == 'success':
+#             network_handler.verify_commune_status(miner_id)
+#             console.print(Panel(
+#                 "[green]Successfully registered with Commune network![/green]",
+#                 title="🌐 Commune Registration Status",
+#                 border_style="green"
+#             ))
+#         else:
+#             console.print(Panel(
+#                 "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]",
+#                 title="⚠️ Partial Registration",
+#                 border_style="yellow"
+#             ))
+#     except Exception as e:
+#         console.print(Panel(
+#             f"[red]An error occurred during Commune subnet registration: {str(e)}[/red]",
+#             title="❌ Commune Registration Error",
+#             border_style="red"
+#         ))
 
 def register_independent_miner(skip_existing_check=False):
     from rich import box
