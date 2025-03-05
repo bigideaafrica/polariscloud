@@ -1,15 +1,29 @@
-# setup.py
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from setuptools import find_packages, setup
 
+# Read version from the package
+with open('src/polaris/__init__.py', 'r') as f:
+    for line in f:
+        if line.startswith('__version__'):
+            version = line.split('=')[1].strip().strip('"\'')
+            break
+
+with open('README.md', 'r') as f:
+    long_description = f.read()
+
 setup(
-    name='polaris-cli-tool',
-    version='1.0.7',
-    description='Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources',
+    name='polaris-subnet',
+    version=version,
+    description='Polaris - Modern Development Workspace Manager for Distributed Compute Resources',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Polaris Team',
     author_email='help@polariscloud.ai',
     url='https://github.com/bigideainc/polaris-subnet',
-    packages=find_packages(),
+    package_dir={"": "src"},
+    packages=find_packages(where="src", exclude=['tests', 'tests.*']),
     include_package_data=True,
     install_requires=[
         'click',
@@ -18,17 +32,18 @@ setup(
         'click-spinner',
         'rich',
         'loguru',
-        'inquirer',
+        'questionary',  # Changed from inquirer to questionary to match the imports
         'requests',
         'xlsxwriter',
         'pyyaml',
         'psutil',
         'python-dotenv',
-        'pid',  # Added pid package
+        'pid',
+        'bittensor',  # Added explicitly
     ],
     entry_points={
         'console_scripts': [
-            'polaris=polaris_cli.cli:cli',
+            'polaris=polaris.cli.commands:cli',
         ],
     },
     classifiers=[
@@ -36,5 +51,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.6',
-)
+    python_requires='>=3.8',
+) 
