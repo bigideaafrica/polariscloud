@@ -59,3 +59,32 @@ docs/.scraper_cache.json
 # Temporary files
 tmp/
 temp/ venv_py3.12/
+venv_py3.12/pyvenv.cfg
+venv_py3.12/bin/activate
+venv_py3.12/bin/activate.csh
+venv_py3.12/bin/activate.fish
+venv_py3.12/bin/Activate.ps1
+venv_py3.12/bin/base58
+venv_py3.12/bin/btcli
+venv_py3.12/bin/dotenv
+venv_py3.12/bin/f2py
+venv_py3.12/bin/markdown-it
+venv_py3.12/bin/netaddr
+venv_py3.12/bin/normalizer
+venv_py3.12/bin/numpy-config
+venv_py3.12/bin/pip
+venv_py3.12/bin/pip3
+venv_py3.12/bin/pip3.12
+venv_py3.12/bin/polaris
+venv_py3.12/bin/py.test
+venv_py3.12/bin/pygmentize
+venv_py3.12/bin/pytest
+venv_py3.12/bin/python
+venv_py3.12/bin/python3
+venv_py3.12/bin/python3.12
+venv_py3.12/bin/pywry
+venv_py3.12/bin/tabulate
+venv_py3.12/bin/typer
+venv_py3.12/bin/uvicorn
+venv_py3.12/bin/vba_extract.py
+venv_py3.12/bin/wheel

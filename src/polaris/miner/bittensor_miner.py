@@ -119,7 +119,7 @@ log_file = Path.home() / '.polaris/bittensor/logs/miner.log'
 def log(msg):
     with open(log_file, 'a') as f:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        f.write(f"{{timestamp}} |       INFO       | bittensor:loggingmachine.py:377 |  - {{msg}} -\\n")
+        f.write(f"{{{{timestamp}}}} |       INFO       | bittensor:loggingmachine.py:377 |  - {{{{msg}}}} -\\n")
 
 # Log startup
 log("Starting Bittensor miner in simulation mode...")
@@ -129,19 +129,19 @@ log("Local miner running in simulation mode...")
 # Simulation loop
 iteration = 1
 while True:
-    log(f"Miner iteration {{iteration}} at {{time.time()}}")
+    log(f"Miner iteration {{{{iteration}}}} at {{{{time.time()}}}}")
     request_type = "Storage"
-    log(f"Received simulated request for {{request_type}} resources")
+    log(f"Received simulated request for {{{{request_type}}}} resources")
     
     # Simulate processing time (0.5-1.5 seconds)
     process_time = random.uniform(0.5, 1.5)
     time.sleep(process_time)
     
-    log(f"Response: Processed {{request_type}} request in {process_time:.2f}s")
+    log(f"Response: Processed {{{{request_type}}}} request in {{{{process_time:.2f}}}}s")
     
     # Random sleep between iterations (5-20 seconds)
     sleep_time = random.uniform(5, 20)
-    log(f"Sleeping for {sleep_time:.2f}s")
+    log(f"Sleeping for {{{{sleep_time:.2f}}}}s")
     time.sleep(sleep_time)
     iteration += 1
 '''
