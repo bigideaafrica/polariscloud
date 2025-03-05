@@ -49,6 +49,9 @@ htmlcov/
 # Documentation
 docs/_build/
 docs/api/
+docs/bittensor_subnet_resources.py
+docs/bittensor_subnet_resources.md
+docs/.scraper_cache.json
 
 # Jupyter Notebooks
 .ipynb_checkpoints
