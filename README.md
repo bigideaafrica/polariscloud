@@ -165,6 +165,127 @@ Once configured, verify that your compute node is accessible from the internet:
 
 ---
 
+## Setting Up a Linux Environment for Windows and macOS Users
+
+While Polaris is designed to be cross-platform, certain features work best in a Linux environment. Windows and macOS users should set up a Linux virtual environment for optimal performance.
+
+### For Windows Users: Windows Subsystem for Linux (WSL)
+
+WSL allows you to run a Linux environment directly on Windows without the need for a traditional virtual machine.
+
+1. **Install WSL**:
+   Open PowerShell as Administrator and run:
+   ```powershell
+   wsl --install
+   ```
+   This will install WSL 2 with Ubuntu by default.
+
+2. **Restart your computer** when prompted.
+
+3. **Set up your Ubuntu user account**:
+   After restart, a Ubuntu terminal will open automatically.
+   Create a username and password when prompted.
+
+4. **Update and upgrade packages**:
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+5. **Install Docker in WSL**:
+   ```bash
+   # Install Docker prerequisites
+   sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+
+   # Add Docker's official GPG key
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+   # Add Docker repository
+   sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+   # Install Docker
+   sudo apt update
+   sudo apt install -y docker-ce
+
+   # Start Docker service
+   sudo service docker start
+
+   # Add your user to the Docker group
+   sudo usermod -aG docker $USER
+   ```
+
+6. **Install SSH server**:
+   ```bash
+   sudo apt install -y openssh-server
+   sudo service ssh start
+   sudo systemctl enable ssh
+   ```
+
+7. **Now follow the Polaris installation steps** in your WSL terminal.
+
+### For macOS Users: Docker Desktop with Ubuntu Container
+
+1. **Install Docker Desktop**:
+   Download and install Docker Desktop from the [official website](https://www.docker.com/products/docker-desktop).
+
+2. **Run an Ubuntu container**:
+   Open Terminal and run:
+   ```bash
+   docker run -it --name polaris-env ubuntu:20.04
+   ```
+
+3. **Set up the Ubuntu environment**:
+   ```bash
+   apt update && apt upgrade -y
+   apt install -y python3 python3-pip git curl openssh-server sudo
+   
+   # Create a non-root user (optional but recommended)
+   adduser polaris
+   usermod -aG sudo polaris
+   su - polaris
+   ```
+
+4. **Start SSH server**:
+   ```bash
+   sudo service ssh start
+   ```
+
+5. **Now follow the Polaris installation steps** within your Ubuntu container.
+
+### Alternative: Using a Full Virtual Machine
+
+If you prefer a full virtual machine:
+
+1. **Download and install VirtualBox** from [virtualbox.org](https://www.virtualbox.org/).
+
+2. **Download Ubuntu 20.04 LTS** from [ubuntu.com](https://ubuntu.com/download/desktop).
+
+3. **Create a new virtual machine**:
+   - Open VirtualBox and click "New"
+   - Name: Polaris
+   - Type: Linux
+   - Version: Ubuntu (64-bit)
+   - Allocate at least 4GB RAM
+   - Create a virtual hard disk (at least 30GB)
+
+4. **Install Ubuntu**:
+   - Start the VM
+   - Select the Ubuntu ISO
+   - Follow the installation wizard
+
+5. **Update the system**:
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+
+6. **Install necessary packages**:
+   ```bash
+   sudo apt install -y git python3-pip docker.io openssh-server
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker $USER
+   ```
+
+7. **Now follow the Polaris installation steps** within your Ubuntu VM.
+
 ## Installation and Setup
 
 ### 1. Clone the Repository
@@ -208,21 +329,41 @@ python -m venv venv
 
 Once activated, your command prompt should indicate the virtual environment is active (e.g., it may start with `(venv)`).
 
-### 3. Install Dependencies
+### 3. Install Required System Packages
 
-Ensure you have **Python 3.6** or higher installed. With the virtual environment active, install the required dependencies:
+Before installing Python dependencies, you need to install several system packages and network-specific requirements:
 
 ```bash
-pip install -r requirements.txt
+# Install system dependencies
+sudo apt install g++ rustc cargo build-essential python3-dev
+
+# Install network-specific packages
+pip install bittensor
+pip install bittensor-cli
+pip install communex==0.1.36.4
 ```
 
-After install Polaris in editable mode:
+### 4. Clone and Install Polaris
+
+After installing the prerequisites, clone the Polaris repository and install it:
 
 ```bash
+# Clone the repository
+git clone https://github.com/bigideainc/polaris-subnet.git
+cd polaris-subnet
+
+# Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies from requirements.txt
+pip install -r requirements.txt
+
+# Install Polaris in development mode
 pip install -e .
 ```
 
-### 4. Configure SSH and Network Settings
+### 5. Configure SSH and Network Settings
 
 Polaris uses SSH and network port configuration for secure connections. Add your SSH and network settings to a `.env` file at the root of the project:
 
@@ -239,20 +380,7 @@ SSH_PORT=1xxxx
 SERVER_URL=https://orchestrator-gekh.onrender.com/api/v1
 ```
 
-**Important Configuration Settings:**
-
-- `HOST`: Your machine's public IP address
-- `API_PORT`: Port for the API service
-- `SSH_PORT_RANGE_START` and `SSH_PORT_RANGE_END`: Range of SSH ports to use
-- `SSH_PASSWORD`: Your SSH password
-- `SSH_USER`: Your SSH username
-- `SSH_HOST`: The SSH host (usually your public IP)
-- `SSH_PORT`: The primary SSH port to use
-- `SERVER_URL`: The orchestrator server URL
-
-**Note:** The SSH password is used to configure and manage secure SSH connections between your machine and the Polaris compute network.
-
-### 5. Verify Installation
+### 6. Verify Installation
 
 Check that Polaris is installed correctly by running:
 
@@ -260,425 +388,339 @@ Check that Polaris is installed correctly by running:
 polaris --help
 ```
 
-You should see output similar to:
+## Polaris Commands
 
-```
-Usage: polaris [OPTIONS] COMMAND [ARGS]...
+### polaris register
 
-Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  check-main     Check if main process is running and view its logs.
-  logs           View logs without process monitoring.
-  register       Register a new miner.
-  start          Start Polaris and Compute Subnet as background processes.
-  status         Check if Polaris and Compute Subnet are running.
-  stop           Stop Polaris and Compute Subnet background processes.
-  update         Update various Polaris components.
-  view-compute   View pod compute resources.
-```
-
----
-
-## Usage Guide
-
-### **Start the Polaris Service**
-
-After ensuring all prerequisites are met, start Polaris with:
-
-```bash
-polaris start
-```
-
-**Example Interaction:**
-
-```
-Starting Polaris...
-Please select the type of node you want to run:
-1. Miner Node
-2. Validator Node
-Enter choice [1-2]: 1
-
-Starting Miner Node...
-polaris started successfully with PID 12345.
-compute_subnet started successfully with PID 67890.
-Logs: stdout -> logs/polaris_stdout.log, stderr -> logs/polaris_stderr.log
-```
-
-*Note:* Selecting "2" for Validator Node will initiate validator-specific services.
-
----
-
-### **Register a New Miner**
-
-To register as a new miner, run:
+This command initiates the registration process for your node on the Polaris network.
 
 ```bash
 polaris register
 ```
 
-#### Registration Process:
+When you run this command, you'll see a registration type selection prompt with arrow key navigation:
 
-1. **System Information Check**
+```
+2025-03-04 19:15:09,023 [INFO] Enabling default logging (Warning level)
+2025-03-04 19:15:09,023 |     INFO     | Enabling default logging (Warning level)
+🔑 Select registration type: (Use arrow keys)
+» Commune Miner Node
+  Bittensor Miner Node
+  Polaris Miner Node (Coming Soon)
+  Independent Miner
+```
 
-   Upon running the registration command, Polaris will load and validate your system's compute resources. You will see detailed information similar to the following:
+#### Commune Miner Node Registration
 
+If you select "Commune Miner Node", you'll be asked if you already have a Commune key:
+
+```
+2025-03-04 19:15:09,023 [INFO] Enabling default logging (Warning level)
+2025-03-04 19:15:09,023 |     INFO     | Enabling default logging (Warning level)
+🔑 Select registration type: Commune Miner Node
+? Do you have an existing Commune key? (Y/n) 
+```
+
+If you answer "No", you'll be prompted to create a new key:
+
+```
+2025-03-04 19:15:09,023 [INFO] Enabling default logging (Warning level)
+2025-03-04 19:15:09,023 |     INFO     | Enabling default logging (Warning level)
+🔑 Select registration type: Commune Miner Node
+? Do you have an existing Commune key? No
+Enter a name for your new Commune key: poly
+```
+
+After creating the key, the system checks your COMAI balance and may display a warning if it's insufficient:
+
+```
+Key poly created successfully.
+⚠️Low Balance Warning━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WARNING: Your current balance is 0.0 COMAI.
+A minimum of 10 COMAI is recommended for registration.
+You may proceed, but some network features might be limited.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Network Selection ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Available networks:
+1. Mainnet (netuid=33)
+2. Testnet (netuid=12)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Select network (enter 1 for Mainnet or 2 for Testnet) [1/2] (1): 
+```
+
+After selecting your network (Mainnet or Testnet), the system will confirm your selection:
+
+```
+Select network (enter 1 for Mainnet or 2 for Testnet) [1/2] (1): 1
+Selected network: Mainnet (netuid=33)
+```
+
+#### Bittensor Miner Node Registration
+
+If you select "Bittensor Miner Node", you'll see this process:
+
+```
+2025-03-04 19:32:57,920 [INFO] Enabling default logging (Warning level)
+2025-03-04 19:32:57,920 |     INFO     | Enabling default logging (Warning level)
+🔑 Select registration type: Bittensor Miner Node
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Bittensor Setup ━━━━━━━━━━━━━━━━━━━━━━━━━
+Bittensor Wallet Configuration
+You'll need a wallet to participate in the Bittensor subnet
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+? Do you already have a Bittensor wallet? (Y/n)
+```
+
+If you answer "No", you'll be prompted to create a new wallet:
+
+```
+? Do you already have a Bittensor wallet? No
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Wallet Creation ━━━━━━━━━━━━━━━━━━━━━━━━━
+Creating a New Bittensor Wallet
+You will need to provide a name for your new wallet.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+? Enter a name for your new wallet: poly
+```
+
+The wallet creation process includes several steps:
+
+1. **Create Coldkey:**
    ```
-   System Information
-   ------------------
-   Location: Example City, Example Country
-   Compute Resources:
-     - ID: ABCD1234-EFGH-5678-IJKL-9012MNOP3456
-     - Resource Type: CPU
-     - RAM: 32GB
-     - Storage: SSD, 1TB, Read Speed: 550MB/s, Write Speed: 520MB/s
-     - CPU Specs: Example CPU Model, 8 Cores, 3.2GHz
-     - Network: Internal IP - 192.168.1.100, SSH - ssh://user@your_public_ip:11000
+   Creating new coldkey...
+   Enter the path to the wallets directory (~/bittensor/wallets/): 
+   Choose the number of words [12/15/18/21/24]: 12
+   
+   IMPORTANT: Store this mnemonic in a secure (preferable offline place), as anyone who has possession of this mnemonic can use it to regenerate the key and access your tokens.
+   
+   The mnemonic to the new coldkey is: awkward giant record strong sugar ensure lens inch dinner kite fatigue orbit
+   You can use the mnemonic to recreate the key with "btcli" in case it gets lost.
    ```
 
-2. **User Verification**
-
-   After displaying system information, Polaris will prompt you to verify and proceed with the registration:
-
+2. **Set Password:**
    ```
-   Do you want to proceed with this registration? [y/n]: y
+   Enter your password: 
+   Password not strong enough. Try increasing the length of the password or the password complexity.
+   Enter your password again: 
+   Retype your password: 
+   Encrypting...
+   Coldkey created
    ```
 
-3. **Username and Wallet Setup**
+3. **Create Hotkey:**
+   ```
+   Creating new hotkey...
+   Choose the number of words [12/15/18/21/24]: 12
+   
+   IMPORTANT: Store this mnemonic in a secure (preferable offline place), as anyone who has possession of this mnemonic can use it to regenerate the key and access your tokens.
+   
+   The mnemonic to the new hotkey is: spoon month first wild travel oppose skin birth roast vague what patient
+   You can use the mnemonic to recreate the key with "btcli" in case it gets lost.
+   Hotkey created
+   Wallet created successfully!
+   ```
 
-   - **Enter Desired Username:**
+4. **Network Selection:**
+   ```
+   ? Select the network to register on: (Use arrow keys)
+   » Mainnet (netuid 100)
+     Testnet (netuid 12)
+   ```
 
-     ```
-     Enter your desired username (): sampleuser
-     ```
+#### Polaris Miner Node Registration
 
-   - **Commune Wallet Registration Prompt:**
+If you select "Polaris Miner Node (Coming Soon)", you'll see:
 
-     Before entering your Commune wallet name, ensure that your wallet key is registered under our Polaris subnet on Commune. If you don't have a registered Commune miner wallet, follow the instructions below to create and register one.
+```
+2025-03-04 19:35:27,624 [INFO] Enabling default logging (Warning level)
+2025-03-04 19:35:27,624 |     INFO     | Enabling default logging (Warning level)
+🔑 Select registration type: Polaris Miner Node (Coming Soon)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🏗️ Coming Soon ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Polaris Miner Node is coming soon!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
 
-     **Sample Prompt:**
+This feature is not yet implemented and will return you to the command prompt.
 
-     ```
-     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔒 Commune Miner Registration ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     ┃                                                                                            ┃
-     ┃   You are about to register as a POLARIS COMMUNE MINER                                     ┃
-     ┃                                                                                            ┃
-     ┃   This will:                                                                               ┃
-     ┃   • Connect you to our Polaris Commune Network                                             ┃
-     ┃   • Enable you to earn rewards                                                             ┃
-     ┃   • Join the decentralized compute ecosystem                                               ┃
-     ┃                                                                                            ┃
-     ┃   ────────────────────────────────────                                                     ┃
-     ┃                                                                                            ┃
-     ┃   Requirements:                                                                            ┃
-     ┃   • Must have registered Commune key                                                       ┃
-     ┃   • Key must be registered under our Polaris subnet on Commune                             ┃
-     ┃                                                                                            ┃
-     ┃   If you don't have a registered Commune miner wallet, follow instructions below:          ┃
-     ┃   • [Commune Keys Documentation](https://communeai.org/docs/working-with-keys/key-basics)    ┃
-     ┃   • [Polaris Subnet Registration Instructions](https://github.com/bigideainc/polaris-subnet) ┃
-     ┃                                                                                            ┃
-     ┃   Please enter your Commune wallet name below                                              ┃
-     ┃                                                                                            ┃
-     ┃   Note: This wallet must be registered under Polaris miner subnet (NetUID 33) on Commune    ┃
-     ┃                                                                                            ┃
-     ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-     ```
+### polaris start
 
-     ```
-     Enter your Commune wallet name: sample_wallet
-     ```
-
-4. **Creating and Registering Your Commune Wallet for Miner Registration**
-
-   **Step-by-Step Instructions:**
-
-   1. **Install CommuneX:**
-
-      Install the CommuneX package, a tool for interacting with the Commune network:
-
-      ```bash
-      pip install communex
-      ```
-
-   2. **Create a Wallet (Burns 10 COMAI Tokens):**
-
-      Before creating a new wallet, **ensure that your Commune account has at least 10 COMAI tokens**. This is necessary because creating a wallet will burn 10 COMAI tokens on the Commune network as part of the key creation process.
-
-      Forge a new wallet for your mining ventures:
-
-      ```bash
-      comx key create sample_wallet
-      ```
-
-      **Sample Output:**
-
-      ```
-      Creating new Commune wallet 'sample_wallet'...
-      Wallet 'sample_wallet' created successfully.
-      Note: 10 COMAI tokens have been burned for wallet creation.
-      ```
-
-   3. **Register on Polaris Compute Subnet (NetUID 33) as a Miner:**
-
-      After creating your wallet, register it under the Polaris subnet.
-
-      ```bash
-      comx module register miner sample_wallet 33
-      ```
-
-      **Sample Output:**
-
-      ```
-      Registering wallet 'sample_wallet' on Polaris Compute Subnet (NetUID 33)...
-      Verification of COMAI tokens...
-      Registration successful.
-      Your wallet 'sample_wallet' is now registered under Polaris Compute Subnet.
-      ```
-
-   5. **Complete Miner Registration:**
-
-      - **Enter Commune Wallet Name:**
-
-        After successfully registering your Commune wallet, return to the Polaris registration process. Enter your Commune wallet name when prompted:
-
-        ```
-        Enter your Commune wallet name: sample_wallet
-        ```
-
-      - **System Retrieves Commune UID:**
-
-        ```
-        Retrieving Commune UID...
-        2025-01-07 05:03:14,224 [INFO] Retrieved miner UID: 2 for wallet: sample_wallet
-        ```
-
-      - **Registration Confirmation:**
-
-        ```
-        Registration Complete
-        ---------------------
-        Miner ID: MINERID1234567890
-        Added Resources: CPU
-        Network: Commune
-        Wallet Name: sample_wallet
-        Commune UID: CID_SAMPLE123
-
-        Important: Save your Miner ID - you'll need it to manage your compute resources.
-        ```
-
-   6. **Validation Checks:**
-
-      Throughout the registration process, Polaris performs several validation checks to ensure everything is configured correctly:
-
-      - **System Information Format:** Ensures all system details are correctly formatted and complete.
-      - **Compute Resource Specifications:** Verifies that your compute resources meet the required specifications.
-      - **Network Connectivity:** Confirms that your machine is properly connected to the Polaris network via your public IP and SSH.
-      - **SSH Configuration:** Checks that SSH is correctly configured and accessible.
-      - **User Inputs:** Validates the accuracy and format of the entered username and Commune wallet name.
-
-      **Sample Validation Output:**
-
-      ```
-      Running validation checks...
-      ✔ System Information: Valid
-      ✔ Compute Resources: Sufficient specifications
-      ✔ Network Connectivity: Public IP accessible
-      ✔ SSH Configuration: Active and accessible
-      ✔ User Inputs: Username and wallet name validated
-      All validation checks passed successfully.
-      ```
-
----
-
-### **View Compute Resources**
-
-List all registered compute resources in a formatted table:
+This command starts the Polaris service and selected compute processes.
 
 ```bash
-polaris view-compute
+polaris start
 ```
 
-**Example Output:**
+When you run this command, you'll be prompted to select which mode you want to run:
 
 ```
-Pod Details
------------
-ID: MINERID1234567890
-Name: Polaris Compute Pod
-Location: Example City, Example Country
-Description: Distributed compute node
-
-Compute Resources
------------------
-ID           Type  Location             Price/Hr  RAM    Storage      Specs
------------- ----- -------------------- --------- ------ ----------- ----------------------------------
-CPU123456    CPU   Example City, Country $0.10/hr  32GB   SSD 1TB     8 Cores, 3.2GHz
-GPU789012    GPU   Example City, Country $0.20/hr  16GB   SSD 512GB   NVIDIA Tesla V100, 5000 CUDA Cores
+🚀 Select mode:
+> Miner
+  Validator
 ```
 
----
+After selecting and confirming, upon successful startup, you'll see the Polaris dashboard:
 
-### **Check Service Status**
+```
+                                                POLARIS SUBNET
 
-Verify if Polaris and Compute Subnet processes are running:
+                              ____        __            _     
+                             / __ \____  / /___ _______(_)____
+                            / /_/ / __ \/ / __ `/ ___/ / ___/
+                           / ____/ /_/ / / /_/ / /  / (__  ) 
+                          /_/    \____/_/\__,_/_/  /_/____/  
+    
+                           ♦ The Best Place to List Your GPUs ♦
+
+                        Welcome to the Polaris Compute Subnet!
+
+         ♦ Our Mission is to be the Best Place on This Planet to List Your GPUs - We're just getting
+                                          started! ♦
+
+                                 Powering GPU Computation
+
+┌───────────────────────────────────────────────┬─────────────────────────────────────────────────┐
+│ Setup Commands                                │ Service Management                              │
+│ • register - Register as a new miner (required│ • start - Start Polaris and selected compute pro│
+│ • update subnet - Update the Polaris repositor│ • stop - Stop running processes                 │
+│                                               │ • status - Check if services are running        │
+└───────────────────────────────────────────────┴─────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────┬─────────────────────────────────────────────────┐
+│ Monitoring & Logs                             │ Bittensor Integration                           │
+│ • logs - View logs without process monitoring │ Polaris integrates with Bittensor to provide a d│
+│ • monitor - Monitor miner heartbeat signals in│ • Wallet Management - Create or use existing Bit│
+│ • check-main - Check if main process is runnin│ • Validator Mode - Run as a Bittensor subnet val│
+│ • view-compute - View pod compute resources   │ • Network Registration - Register with Bittensor│
+│                                               │ • Heartbeat Service - Maintain connection with t│
+└───────────────────────────────────────────────┴─────────────────────────────────────────────────┘
+
+                                    Quick Start Guide
+1. First register as a miner
+2. Then start your preferred service type
+3. Check status to verify everything is running
+4. Use logs to monitor operation
+5. Use stop when you want to shut down services
+
+Examples:
+$ polaris register - Register as a new miner
+$ polaris start - Start the Polaris services
+$ polaris status - Check which services are running
+$ polaris stop - Stop running services
+$ polaris logs - View service logs
+```
+
+### polaris status
+
+This command checks if Polaris services are running.
 
 ```bash
 polaris status
 ```
 
-**Example Output:**
+Example output when services are running:
 
 ```
-polaris is running with PID 12345.
-compute_subnet is running with PID 67890.
+[green]polaris is running with PID 22845.[/green]
+[green]heartbeat service is running with PID 22846.[/green]
+[green]system process is running with PID 22847.[/green]
 ```
 
----
-
-### **Stop the Polaris Service**
-
-Stop Polaris and Compute Subnet:
-
-```bash
-polaris stop
-```
-
-**Example Output:**
+Example output when services are not running:
 
 ```
-Stopping Polaris...
-polaris stopped successfully.
-Stopping Compute Subnet...
-compute_subnet stopped successfully.
+[yellow]polaris is not running.[/yellow]
+[yellow]heartbeat service is not running.[/yellow]
+[yellow]system process is not running.[/yellow]
 ```
 
----
+### polaris logs
 
-### **View Logs**
-
-Access Polaris logs without monitoring processes:
+This command displays log files without process monitoring.
 
 ```bash
 polaris logs
 ```
 
-**Example Output:**
+Example output showing active logs:
 
 ```
-[INFO] 2025-01-07 05:00:00: Polaris service started.
-[INFO] 2025-01-07 05:05:00: New miner registered with ID MINERID1234567890.
+API logs: /home/polaris/pol/polaris-subnet/logs/api_server.log
+2025-03-04 19:32:57,920 [INFO] API server started
+2025-03-04 19:33:12,345 [INFO] Handling heartbeat request
+2025-03-04 19:33:42,671 [INFO] Compute resource status: ACTIVE
+...
 ```
 
----
+### polaris monitor
 
-### **Update Subnet Repository**
-
-Update the Polaris subnet repository to the latest version:
+This command monitors miner heartbeat signals in real-time.
 
 ```bash
-polaris update subnet
+polaris monitor
 ```
 
-**Example Output:**
+Example display showing a real-time heartbeat monitor:
 
 ```
-Updating Polaris Subnet Repository...
-Update completed successfully.
+╔════════════════════════════ Polaris Heartbeat Monitor ════════════════════════════╗
+║                                                                                   ║
+║  Miner ID: rNzk6vnQd1j1qWt8Ajue                                                   ║
+║  Status: ONLINE                                                                   ║
+║  Last Heartbeat: 2025-03-04 19:42:15.123 UTC (2 seconds ago)                      ║
+║                                                                                   ║
+║  System Metrics:                                                                  ║
+║  ├─ CPU: 12%                                                                      ║
+║  ├─ Memory: 2.3GB/7.6GB (30%)                                                     ║
+║  ├─ Disk: 324GB/1006GB (32%)                                                      ║
+║  └─ Network: 2.1 Mbps ↓ / 0.4 Mbps ↑                                              ║
+║                                                                                   ║
+║  Press Ctrl+C to exit                                                             ║
+║                                                                                   ║
+╚═══════════════════════════════════════════════════════════════════════════════════╝
 ```
 
----
+### polaris check-main
 
-### **Check Main Process Logs**
-
-Check if the main process is running and view its logs:
+This command checks if the main process is running and displays its logs.
 
 ```bash
 polaris check-main
 ```
 
-**Example Output:**
+Example output:
 
 ```
-Main process is running with PID 12345.
-Logs: logs/main_stdout.log, logs/main_stderr.log
+[green]Main process is running with PID 22847.[/green]
+[cyan]Recent logs:[/cyan]
+2025-03-04 19:36:30,543 [INFO] System process started
+2025-03-04 19:36:45,217 [INFO] Resource monitoring initialized
+2025-03-04 19:37:01,342 [INFO] Heartbeat registered
 ```
 
----
+### polaris view-compute
 
-## Technical Documentation
+This command displays information about your compute resources.
 
-### System Architecture Overview
-
-```mermaid
-flowchart TB
-    M[Miner] -->|HeartbeatRequest| API[FastAPI Endpoints]
-    API -->|record_heartbeat| HS[HeartbeatStore]
-    API -->|verify_miner| MS[MinerService]
-    HS -->|Cache| MC[miner_heartbeats Dict]
-    HS -->|Store| HR[HeartbeatRepository]
-    HS -->|Monitor| HC[Health Check Task]
-    HR -->|Write| FS[(Firestore)]
-    subgraph "Firestore Collections"
-        MS1[miner_states]
-        MS2[status_history]
-        MS3[metrics_history]
-    end
-    FS --> MS1
-    FS --> MS2
-    FS --> MS3
+```bash
+polaris view-compute
 ```
 
-### Core Components
+Example output showing your registered compute resources:
 
-#### HeartbeatStore
-
-Manages in-memory state tracking of miner heartbeats and orchestrates periodic health checks:
-
-```python
-class HeartbeatStore:
-    def __init__(self):
-        self.miner_heartbeats: Dict[str, datetime] = {}
-        self.repository = HeartbeatRepository()
-        self.offline_threshold = timedelta(seconds=45)
-        self.health_check_task = None
-        self._alert_sent: Dict[str, bool] = {}
 ```
+Pod Details
+-----------
+ID: rNzk6vnQd1j1qWt8Ajue
+Name: poly's Compute Pod
+Location: Kampala, Central Region, UG
+Description: Independent miner compute resources
 
-#### Database Schema
-
-```mermaid
-erDiagram
-    miner_states ||--o{ status_history : "records_changes"
-    miner_states ||--o{ metrics_history : "stores_metrics"
-
-    miner_states {
-        string miner_id PK
-        datetime last_heartbeat
-        string current_status
-        json current_metrics
-        int heartbeat_count
-        datetime updated_at
-    }
-
-    status_history {
-        string miner_id FK
-        datetime timestamp
-        string old_status 
-        string new_status
-        string reason
-    }
-
-    metrics_history {
-        string miner_id FK
-        datetime timestamp
-        string status
-        json metrics
-        float time_since_last
-    }
+Compute Resources
+-----------------
+ID                              | Type | Location                  | RAM   | Storage     | CPU                   
+--------------------------------| ---- | ------------------------- | ----- | ----------- | ----------------------
+aa54c5de-8ee8-41b8-aa89-f623d6b | CPU  | Kampala, Central Region   | 7.6GB | HDD 1006GB  | Intel i7-1255U, 12 cores
 ```
 
 For complete technical documentation, including API endpoints, data models, error handling, and more, please refer to the [Technical Documentation](./docs/technical.md).

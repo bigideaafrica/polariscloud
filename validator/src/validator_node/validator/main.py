@@ -3,6 +3,8 @@ import os
 import signal
 import sys
 import time
+import asyncio
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -72,12 +74,14 @@ def initialize_client(settings: ValidatorSettings):
 
 @app.command()
 def main(
-    wallet: str = typer.Option(..., help="Commune wallet name"),
+    wallet: str = typer.Option(..., help="Wallet name"),
     testnet: bool = typer.Option(False, help="Use testnet endpoints"),
     log_level: str = typer.Option("INFO", help="Logging level"),
     host: str = typer.Option("0.0.0.0", help="Host address to bind to"),
     port: int = typer.Option(8000, help="Port to listen on"),
-    iteration_interval: int = typer.Option(800, help="Interval between validation iterations")
+    iteration_interval: int = typer.Option(800, help="Interval between validation iterations"),
+    network: str = typer.Option("commune", help="Network to validate for (commune or bittensor)"),
+    netuid: int = typer.Option(None, help="Network UID to validate (defaults to 33 for Commune, 49 for Bittensor)")
 ):
     """Main validator process
     
@@ -91,6 +95,16 @@ def main(
     # Setup signal handlers
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
+    
+    # Validate network parameter
+    if network not in ["commune", "bittensor"]:
+        console.print(Panel(
+            f"[red]Invalid network '{network}'. Must be 'commune' or 'bittensor'.[/red]", 
+            title="Error", 
+            border_style="red",
+            box=box.HEAVY
+        ))
+        return
     
     # Initialize logging
     log_file = setup_logging()
@@ -106,11 +120,20 @@ def main(
     ) as progress:
         try:
             # Task for key loading
-            key_task = progress.add_task("[cyan]Loading commune key...", total=1)
+            key_task = progress.add_task("[cyan]Loading key...", total=1)
             
-            # Load commune key
+            # Load key
             try:
-                key = classic_load_key(wallet)
+                # Load network-specific key
+                if network == "commune":
+                    logger.info(f"Loading Commune key for wallet: {wallet}")
+                    key = classic_load_key(wallet)
+                else:  # bittensor
+                    logger.info(f"Loading Bittensor key for wallet: {wallet}")
+                    # For now, we'll still use the Commune key format internally
+                    # This would need to be replaced with proper Bittensor key loading
+                    key = classic_load_key(wallet)
+                
                 logger.info(f"Loaded key for wallet: {wallet}")
                 progress.update(key_task, completed=1)
             except Exception as e:
@@ -129,27 +152,48 @@ def main(
             init_task = progress.add_task("[cyan]Initializing validator node...", total=1)
             
             try:
+                # Set netuid based on network if not provided
+                if netuid is None:
+                    if network == "commune":
+                        netuid = 33  # Default for Commune
+                    else:  # bittensor
+                        netuid = 49  # Default for Bittensor Polaris
+                
                 # Initialize settings with command line parameters
                 settings = ValidatorSettings(
                     use_testnet=testnet,
                     logging_level=log_level,
                     host=host,
                     port=port,
-                    iteration_interval=iteration_interval
+                    iteration_interval=iteration_interval,
+                    max_allowed_weights=420  # Default value
                 )
                 
-                # Initialize the client
-                client = initialize_client(settings)
+                # Add network-specific settings
+                if network == "commune":
+                    # Additional Commune settings
+                    pass
+                else:  # bittensor
+                    # Add Bittensor-specific settings
+                    setattr(settings, 'bittensor_netuid', netuid)
+                    setattr(settings, 'bittensor_network', 'finney' if not testnet else 'test')
+                    
+                # Initialize the appropriate validator
+                if network == "commune":
+                    logger.info(f"Initializing Commune validator for netuid {netuid}")
+                    from validator.src.validator_node.commune_validator import CommuneValidator
+                    validator = CommuneValidator(
+                        key=key,
+                        settings=settings
+                    )
+                else:  # bittensor
+                    logger.info(f"Initializing Bittensor validator for netuid {netuid}")
+                    from validator.src.validator_node.bittensor_validator import BittensorValidator
+                    validator = BittensorValidator(
+                        key=key,
+                        settings=settings
+                    )
                 
-                netuid = get_netuid(client)
-                
-                # Initialize validator node
-                validator = ValidatorNode(
-                    key=key,
-                    netuid=netuid,  # Default netuid
-                    client=client,
-                    max_allowed_weights=settings.max_allowed_weights
-                )
                 progress.update(init_task, completed=1)
                 
             except Exception as e:
@@ -165,32 +209,42 @@ def main(
                 return
 
             # Task for startup
-            startup_task = progress.add_task("[cyan]Starting validator process...", total=1)
+            startup_task = progress.add_task(f"[cyan]Starting {network} validator...", total=1)
             
             try:
-                # Update status and show success message
-                update_status("running")
+                # Initialize the network connection
+                asyncio.run(validator.initialize_network())
+                
+                # Start validator API
+                command = f'uvicorn validator.src.validator_node.api:app --host {host} --port {port} --log-level warning'
+                logger.info(f"Starting API server: {command}")
+                subprocess.Popen(command, shell=True)
+                
+                # Start validation loop in a separate thread
+                validator.start_validation_loop()
+                
                 progress.update(startup_task, completed=1)
                 
+                # Update status file
+                update_status("running")
+                
+                # Display success message
                 console.print(Panel(
-                    "[green]Validator successfully started![/green]\n"
-                    f"[blue]Wallet: [white]{wallet}[/white][/blue]\n"
-                    f"[blue]Network: [white]{'Testnet' if testnet else 'Mainnet'}[/white][/blue]\n"
-                    f"[blue]Host: [white]{host}[/white][/blue]\n"
-                    f"[blue]Port: [white]{port}[/white][/blue]",
-                    title="Success",
+                    f"[green]Validator started successfully on {host}:{port}[/green]\n"
+                    f"[white]Network: {network.upper()}[/white]\n"
+                    f"[white]NetUID: {netuid}[/white]\n"
+                    f"[white]Testnet: {'Yes' if testnet else 'No'}[/white]\n"
+                    f"[white]Validation Interval: {iteration_interval}s[/white]",
+                    title="✅ Validator Running",
                     border_style="green",
                     box=box.HEAVY
                 ))
-
-                # Main validation loop
-                logger.info("Starting validation process...")
-                while True:
-                    validator.track_miner_containers()
-                    time.sleep(settings.iteration_interval)
-
+                
+                # Wait for termination signal
+                signal.pause()
+                
             except Exception as e:
-                error_msg = f"Error in validation process: {str(e)}"
+                error_msg = f"Failed to start validator: {str(e)}"
                 logger.error(error_msg)
                 update_status("failed", error_msg)
                 console.print(Panel(
@@ -200,23 +254,16 @@ def main(
                     box=box.HEAVY
                 ))
                 return
-
+                
         except KeyboardInterrupt:
-            logger.info("Validator shutting down...")
-            update_status("stopped")
-            console.print("\n[yellow]Validator shutdown initiated by user[/yellow]")
-        
-        except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
-            logger.error(error_msg)
-            update_status("failed", error_msg)
+            console.print("\n")
             console.print(Panel(
-                f"[red]{error_msg}[/red]", 
-                title="Error", 
-                border_style="red",
-                box=box.HEAVY
+                "[yellow]Validator process cancelled by user.[/yellow]",
+                title="ℹ️ Cancelled",
+                border_style="yellow"
             ))
-            raise
+            update_status("stopped")
+            logger.info("Validator process cancelled by user.")
 
 if __name__ == "__main__":
     app()
