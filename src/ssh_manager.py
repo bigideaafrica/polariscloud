@@ -1,5 +1,6 @@
 import getpass
 import logging
+import os
 import platform
 import subprocess
 import time
@@ -10,8 +11,18 @@ from . import config, utils
 
 class SSHManager:
     def __init__(self):
-        self.logger = logging.getLogger('remote_access')
+        self.logger = logging.getLogger(__name__)
         self.is_windows = platform.system().lower() == 'windows'
+        # Check if systemd is available
+        if not self.is_windows:
+            try:
+                subprocess.run(['systemctl', '--version'], capture_output=True, check=True)
+                self.has_systemd = True
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                self.has_systemd = False
+                self.logger.info("systemd not available, will use alternative service management methods")
+        else:
+            self.has_systemd = False
         
     def _check_linux_ssh_installed(self):
         """Check if OpenSSH is already installed on Linux"""
@@ -102,21 +113,9 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             raise
 
     def setup_server(self, port):
-        self.logger.info("Installing and configuring OpenSSH Server...")
-        
+        """Setup SSH server with the specified port"""
         try:
-            if self.is_windows:
-                utils.run_elevated('powershell -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"')
-                utils.run_elevated('mkdir "C:\\ProgramData\\ssh" 2>NUL')
-            else:
-                if not self._check_linux_ssh_installed():
-                    self._install_linux_ssh()
-                subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
-            
-            # Stop the service
-            self.stop_server()
-            
-            # Create and copy new config
+            # Create sshd_config with the port
             self.create_sshd_config(port)
             
             # Start the service
@@ -125,7 +124,17 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             if self.is_windows:
                 utils.run_elevated('powershell -Command "Set-Service -Name sshd -StartupType Automatic"')
             else:
-                subprocess.run(['sudo', 'systemctl', 'enable', 'ssh'], check=True)
+                if self.has_systemd:
+                    subprocess.run(['sudo', 'systemctl', 'enable', 'ssh'], check=True)
+                else:
+                    # Alternative to enable SSH at startup
+                    rc_local = Path('/etc/rc.local')
+                    if rc_local.exists():
+                        content = rc_local.read_text()
+                        if '/usr/sbin/sshd' not in content:
+                            with open('/etc/rc.local', 'a') as f:
+                                f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
+                            subprocess.run(['chmod', '+x', '/etc/rc.local'], check=True)
                 
         except Exception as e:
             self.logger.error(f"Failed to setup SSH server: {e}")
@@ -190,7 +199,28 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 )
                 stop_cmd.communicate(input='y\n')
             else:
-                subprocess.run(['sudo', 'systemctl', 'stop', 'ssh'], check=True)
+                if self.has_systemd:
+                    subprocess.run(['sudo', 'systemctl', 'stop', 'ssh'], check=True)
+                else:
+                    # Try service command first
+                    try:
+                        subprocess.run(['sudo', 'service', 'ssh', 'stop'], check=True)
+                    except subprocess.CalledProcessError:
+                        # Alternative method - find and kill sshd process
+                        try:
+                            # Get the PID of the sshd process
+                            ps_result = subprocess.run(['ps', '-ef', '|', 'grep', 'sshd', '|', 'grep', '-v', 'grep'], 
+                                                      shell=True, capture_output=True, text=True)
+                            if ps_result.stdout:
+                                # Extract the PID and kill the process
+                                lines = ps_result.stdout.strip().split('\n')
+                                for line in lines:
+                                    parts = line.split()
+                                    if len(parts) > 1:
+                                        pid = parts[1]
+                                        subprocess.run(['sudo', 'kill', pid], check=True)
+                        except subprocess.CalledProcessError as e:
+                            self.logger.warning(f"Could not kill SSH process: {e}")
             time.sleep(2)
         except subprocess.CalledProcessError:
             self.logger.warning("SSH service was not running or could not be stopped")
@@ -208,7 +238,19 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 )
                 start_cmd.communicate(input='y\n')
             else:
-                subprocess.run(['sudo', 'systemctl', 'start', 'ssh'], check=True)
+                if self.has_systemd:
+                    subprocess.run(['sudo', 'systemctl', 'start', 'ssh'], check=True)
+                else:
+                    # Try service command first
+                    try:
+                        subprocess.run(['sudo', 'service', 'ssh', 'start'], check=True)
+                    except subprocess.CalledProcessError:
+                        # Try to start sshd directly
+                        try:
+                            subprocess.run(['sudo', '/usr/sbin/sshd'], check=True)
+                        except subprocess.CalledProcessError as e:
+                            self.logger.error(f"Failed to start SSH server using direct method: {e}")
+                            raise
             time.sleep(2)
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to start SSH server: {e}")
