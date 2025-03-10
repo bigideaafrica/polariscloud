@@ -472,7 +472,7 @@ def main():
         
         while True:
             # Get system information
-            system_info = get_system_info("CPU")
+            system_info = get_system_info()  # Allow auto-detection of resource type
             
             # Initialize managers
             # ngrok = NgrokManager()
