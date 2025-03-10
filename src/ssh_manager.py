@@ -13,10 +13,15 @@ class SSHManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.is_windows = platform.system().lower() == 'windows'
+        # Check if we're running as root
+        self.is_root = os.geteuid() == 0 if not self.is_windows else False
+        self.logger.info(f"Running as root: {self.is_root}")
+        
         # Check if systemd is available
         if not self.is_windows:
             try:
-                subprocess.run(['systemctl', '--version'], capture_output=True, check=True)
+                cmd = ['systemctl', '--version']
+                subprocess.run(cmd, capture_output=True, check=True)
                 self.has_systemd = True
             except (subprocess.CalledProcessError, FileNotFoundError):
                 self.has_systemd = False
@@ -125,7 +130,10 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 utils.run_elevated('powershell -Command "Set-Service -Name sshd -StartupType Automatic"')
             else:
                 if self.has_systemd:
-                    subprocess.run(['sudo', 'systemctl', 'enable', 'ssh'], check=True)
+                    cmd = ['systemctl', 'enable', 'ssh']
+                    if not self.is_root:
+                        cmd.insert(0, 'sudo')
+                    subprocess.run(cmd, check=True)
                 else:
                     # Alternative to enable SSH at startup
                     rc_local = Path('/etc/rc.local')
@@ -134,7 +142,10 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                         if '/usr/sbin/sshd' not in content:
                             with open('/etc/rc.local', 'a') as f:
                                 f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
-                            subprocess.run(['chmod', '+x', '/etc/rc.local'], check=True)
+                            cmd = ['chmod', '+x', '/etc/rc.local']
+                            if not self.is_root:
+                                cmd.insert(0, 'sudo')
+                            subprocess.run(cmd, check=True)
                 
         except Exception as e:
             self.logger.error(f"Failed to setup SSH server: {e}")
@@ -164,7 +175,7 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             else:
                 # Set password using chpasswd
                 chpasswd_proc = subprocess.Popen(
-                    ['sudo', 'chpasswd'],
+                    ['chpasswd'] if self.is_root else ['sudo', 'chpasswd'],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -177,7 +188,10 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
                 
                 # Set ownership
-                subprocess.run(['sudo', 'chown', '-R', f'{username}:{username}', str(ssh_dir)], check=True)
+                cmd = ['chown', '-R', f'{username}:{username}', str(ssh_dir)]
+                if not self.is_root:
+                    cmd.insert(0, 'sudo')
+                subprocess.run(cmd, check=True)
             
             self.logger.info("User configured successfully")
             return username, password
@@ -200,11 +214,17 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 stop_cmd.communicate(input='y\n')
             else:
                 if self.has_systemd:
-                    subprocess.run(['sudo', 'systemctl', 'stop', 'ssh'], check=True)
+                    cmd = ['systemctl', 'stop', 'ssh']
+                    if not self.is_root:
+                        cmd.insert(0, 'sudo')
+                    subprocess.run(cmd, check=True)
                 else:
                     # Try service command first
                     try:
-                        subprocess.run(['sudo', 'service', 'ssh', 'stop'], check=True)
+                        cmd = ['service', 'ssh', 'stop']
+                        if not self.is_root:
+                            cmd.insert(0, 'sudo')
+                        subprocess.run(cmd, check=True)
                     except subprocess.CalledProcessError:
                         # Alternative method - find and kill sshd process
                         try:
@@ -218,7 +238,10 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                                     parts = line.split()
                                     if len(parts) > 1:
                                         pid = parts[1]
-                                        subprocess.run(['sudo', 'kill', pid], check=True)
+                                        cmd = ['kill', pid]
+                                        if not self.is_root:
+                                            cmd.insert(0, 'sudo')
+                                        subprocess.run(cmd, check=True)
                         except subprocess.CalledProcessError as e:
                             self.logger.warning(f"Could not kill SSH process: {e}")
             time.sleep(2)
@@ -239,15 +262,24 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 start_cmd.communicate(input='y\n')
             else:
                 if self.has_systemd:
-                    subprocess.run(['sudo', 'systemctl', 'start', 'ssh'], check=True)
+                    cmd = ['systemctl', 'start', 'ssh']
+                    if not self.is_root:
+                        cmd.insert(0, 'sudo')
+                    subprocess.run(cmd, check=True)
                 else:
                     # Try service command first
                     try:
-                        subprocess.run(['sudo', 'service', 'ssh', 'start'], check=True)
+                        cmd = ['service', 'ssh', 'start']
+                        if not self.is_root:
+                            cmd.insert(0, 'sudo')
+                        subprocess.run(cmd, check=True)
                     except subprocess.CalledProcessError:
                         # Try to start sshd directly
                         try:
-                            subprocess.run(['sudo', '/usr/sbin/sshd'], check=True)
+                            cmd = ['/usr/sbin/sshd']
+                            if not self.is_root:
+                                cmd.insert(0, 'sudo')
+                            subprocess.run(cmd, check=True)
                         except subprocess.CalledProcessError as e:
                             self.logger.error(f"Failed to start SSH server using direct method: {e}")
                             raise

@@ -102,17 +102,27 @@ def configure_ssh():
 def configure_ssh_linux():
     """Configure SSH server on Linux."""
     try:
+        # Check if running as root
+        is_root = os.geteuid() == 0
+        logger.info(f"Running as root: {is_root}")
+        
         # Check if SSH server is installed and running
         logger.info("Checking SSH server status...")
         
         # Try systemctl first, but have fallbacks
         try:
-            result = subprocess.run(['systemctl', 'status', 'ssh'], capture_output=True, text=True)
+            cmd = ['systemctl', 'status', 'ssh']
+            if not is_root:
+                cmd.insert(0, 'sudo')
+            result = subprocess.run(cmd, capture_output=True, text=True)
             using_systemd = True
         except (subprocess.CalledProcessError, FileNotFoundError):
             # Try service command as fallback
             try:
-                result = subprocess.run(['service', 'ssh', 'status'], capture_output=True, text=True)
+                cmd = ['service', 'ssh', 'status']
+                if not is_root:
+                    cmd.insert(0, 'sudo')
+                result = subprocess.run(cmd, capture_output=True, text=True)
                 using_systemd = False
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Final fallback - check if sshd process is running
@@ -123,12 +133,20 @@ def configure_ssh_linux():
                     # Install SSH server if not present
                     logger.info("Installing SSH server...")
                     try:
-                        subprocess.run(['apt-get', 'update'], check=True)
-                        subprocess.run(['apt-get', 'install', '-y', 'openssh-server'], check=True)
+                        cmd_update = ['apt-get', 'update']
+                        cmd_install = ['apt-get', 'install', '-y', 'openssh-server']
+                        if not is_root:
+                            cmd_update.insert(0, 'sudo')
+                            cmd_install.insert(0, 'sudo')
+                        subprocess.run(cmd_update, check=True)
+                        subprocess.run(cmd_install, check=True)
                     except subprocess.CalledProcessError:
                         try:
                             # Try with yum for Red Hat-based systems
-                            subprocess.run(['yum', 'install', '-y', 'openssh-server'], check=True)
+                            cmd_install = ['yum', 'install', '-y', 'openssh-server']
+                            if not is_root:
+                                cmd_install.insert(0, 'sudo')
+                            subprocess.run(cmd_install, check=True)
                         except subprocess.CalledProcessError as e:
                             logger.error(f"Failed to install SSH server: {e}")
                             return False
@@ -138,8 +156,13 @@ def configure_ssh_linux():
         logger.info("Starting SSH service...")
         if using_systemd:
             try:
-                subprocess.run(['systemctl', 'start', 'ssh'], check=True)
-                subprocess.run(['systemctl', 'enable', 'ssh'], check=True)
+                cmd_start = ['systemctl', 'start', 'ssh']
+                cmd_enable = ['systemctl', 'enable', 'ssh']
+                if not is_root:
+                    cmd_start.insert(0, 'sudo')
+                    cmd_enable.insert(0, 'sudo')
+                subprocess.run(cmd_start, check=True)
+                subprocess.run(cmd_enable, check=True)
             except subprocess.CalledProcessError as e:
                 logger.error(f"Failed to start SSH with systemctl: {e}")
                 using_systemd = False
@@ -147,11 +170,17 @@ def configure_ssh_linux():
         if not using_systemd:
             # Try service command
             try:
-                subprocess.run(['service', 'ssh', 'start'], check=True)
+                cmd = ['service', 'ssh', 'start']
+                if not is_root:
+                    cmd.insert(0, 'sudo')
+                subprocess.run(cmd, check=True)
             except subprocess.CalledProcessError:
                 try:
                     # Try direct command
-                    subprocess.run(['/usr/sbin/sshd'], check=True)
+                    cmd = ['/usr/sbin/sshd']
+                    if not is_root:
+                        cmd.insert(0, 'sudo')
+                    subprocess.run(cmd, check=True)
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Failed to start SSH service using alternatives: {e}")
                     return False
@@ -162,9 +191,20 @@ def configure_ssh_linux():
             if rc_local.exists():
                 content = rc_local.read_text()
                 if '/usr/sbin/sshd' not in content:
-                    with open('/etc/rc.local', 'a') as f:
-                        f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
-                    subprocess.run(['chmod', '+x', '/etc/rc.local'], check=True)
+                    # Need to use sudo to write to rc.local if not root
+                    if is_root:
+                        with open('/etc/rc.local', 'a') as f:
+                            f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
+                    else:
+                        with open('/tmp/rc_local_append', 'w') as f:
+                            f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
+                        subprocess.run(['sudo', 'bash', '-c', 'cat /tmp/rc_local_append >> /etc/rc.local'], check=True)
+                        subprocess.run(['rm', '/tmp/rc_local_append'], check=True)
+                    
+                    cmd = ['chmod', '+x', '/etc/rc.local']
+                    if not is_root:
+                        cmd.insert(0, 'sudo')
+                    subprocess.run(cmd, check=True)
         
         logger.info("SSH server configured successfully on Linux.")
         return True
@@ -246,24 +286,41 @@ def setup_firewall():
 def setup_firewall_linux():
     """Configure Linux firewall (ufw) to allow SSH connections."""
     try:
+        # Check if running as root
+        is_root = os.geteuid() == 0
+        
         # Check if ufw is installed
         result = subprocess.run(['which', 'ufw'], capture_output=True)
         if result.returncode != 0:
             logger.info("Installing ufw...")
-            subprocess.run(['apt-get', 'update'], check=True)
-            subprocess.run(['apt-get', 'install', '-y', 'ufw'], check=True)
+            cmd_update = ['apt-get', 'update']
+            cmd_install = ['apt-get', 'install', '-y', 'ufw']
+            
+            if not is_root:
+                cmd_update.insert(0, 'sudo')
+                cmd_install.insert(0, 'sudo')
+                
+            subprocess.run(cmd_update, check=True)
+            subprocess.run(cmd_install, check=True)
         
         # Configure ufw
-        subprocess.run(['ufw', 'allow', 'ssh'], check=True)
-        subprocess.run(['ufw', '--force', 'enable'], check=True)
+        cmd_allow = ['ufw', 'allow', 'ssh']
+        cmd_enable = ['ufw', '--force', 'enable']
+        
+        if not is_root:
+            cmd_allow.insert(0, 'sudo')
+            cmd_enable.insert(0, 'sudo')
+            
+        subprocess.run(cmd_allow, check=True)
+        subprocess.run(cmd_enable, check=True)
         
         logger.info("Linux firewall configured to allow SSH connections.")
         return True
     except subprocess.CalledProcessError as e:
         logger.warning(f"Failed to configure Linux firewall: {e}")
-        return False
-    except Exception as e:
-        logger.warning(f"Error configuring firewall: {e}")
+        # Don't fail the entire process if firewall setup fails
+        # SSH might still work, especially in container environments
+        logger.warning("Could not configure firewall. SSH access might be blocked.")
         return False
 
 def setup_firewall_windows():
