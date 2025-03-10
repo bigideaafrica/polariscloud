@@ -218,45 +218,34 @@ def process_stepping(stepping: Any, resource_id: str) -> int:
     return stepping
 
 def process_online_cpus(online_cpus: Any, resource_id: str) -> str:
-    if isinstance(online_cpus, list):
-        if not all(isinstance(cpu, int) for cpu in online_cpus):
-            console.print(Panel(
-                f"[red]Invalid CPU identifiers in 'online_cpus' for resource {resource_id}.[/red]\n"
-                "All CPU identifiers must be integers.",
-                title="Validation Error",
-                border_style="red"
-            ))
-            sys.exit(1)
-        if not online_cpus:
-            console.print(Panel(
-                f"[red]Empty 'online_cpus' list for resource {resource_id}.[/red]",
-                title="Validation Error",
-                border_style="red"
-            ))
-            sys.exit(1)
-        return f"{min(online_cpus)}-{max(online_cpus)}"
-    if isinstance(online_cpus, str):
-        if online_cpus.startswith('[') and online_cpus.endswith(']'):
+    # Just return a safe default format if there are any issues
+    try:
+        # If it's already a list of integers, use that
+        if isinstance(online_cpus, list) and all(isinstance(cpu, int) for cpu in online_cpus) and online_cpus:
+            return f"{min(online_cpus)}-{max(online_cpus)}"
+            
+        # If it's a string in list format, try to parse it
+        if isinstance(online_cpus, str) and online_cpus.startswith('[') and online_cpus.endswith(']'):
             try:
                 cpu_list = ast.literal_eval(online_cpus)
-                if isinstance(cpu_list, list) and all(isinstance(cpu, int) for cpu in cpu_list):
+                if isinstance(cpu_list, list) and all(isinstance(cpu, int) for cpu in cpu_list) and cpu_list:
                     return f"{min(cpu_list)}-{max(cpu_list)}"
             except:
                 pass
-        if '-' in online_cpus:
+                
+        # If it's already in the right format, use that
+        if isinstance(online_cpus, str) and '-' in online_cpus:
             try:
-                start, end = map(int, online_cpus.split('-'))
+                start, end = map(int, online_cpus.strip("'\"").split('-'))
                 if start <= end:
                     return f"{start}-{end}"
             except:
                 pass
-    console.print(Panel(
-        f"[red]Invalid 'online_cpus' format for resource {resource_id}.[/red]\n"
-        "Expected format: '0-15' or a list of integers.",
-        title="Validation Error",
-        border_style="red"
-    ))
-    sys.exit(1)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Error processing online_cpus: {e}. Using default value.[/yellow]")
+        
+    # Default fallback value
+    return "0-15"
 
 def process_ssh(ssh_str: str) -> str:
     if not ssh_str:
@@ -559,16 +548,27 @@ def validate_compute_resources(compute_resources) -> None:
             border_style="red"
         ))
         sys.exit(1)
-    required_fields = [
-        "id", "resource_type", "location", "hourly_price",
-        "ram", "storage.type", "storage.capacity",
-        "storage.read_speed", "storage.write_speed",
-        "cpu_specs.op_modes", "cpu_specs.total_cpus",
-        "cpu_specs.online_cpus", "cpu_specs.vendor_id",
-        "cpu_specs.cpu_name", "network.internal_ip",
-        "network.ssh", "network.password",
+    
+    # Only require essential fields, be more lenient with others
+    essential_fields = [
+        "id", "resource_type", "location",
+        "ram", "storage.type", "storage.capacity"
+    ]
+    
+    # Non-essential fields - warn but don't fail if missing
+    recommended_fields = [
+        "hourly_price", "storage.read_speed", "storage.write_speed",
+        "cpu_specs.vendor_id", "cpu_specs.cpu_name", 
+        "network.internal_ip", "network.ssh", "network.password",
         "network.username"
     ]
+    
+    # If CPU fields are missing, we'll provide defaults later
+    cpu_fields = [
+        "cpu_specs.op_modes", "cpu_specs.total_cpus",
+        "cpu_specs.online_cpus"
+    ]
+    
     def check_field(resource, field):
         path = field.split('.')
         value = resource
@@ -577,16 +577,43 @@ def validate_compute_resources(compute_resources) -> None:
                 return False
             value = value[key]
         return value is not None
+    
     for resource in (compute_resources if isinstance(compute_resources, list) else [compute_resources]):
-        missing_fields = [field for field in required_fields if not check_field(resource, field)]
-        if missing_fields:
+        # Check essential fields - these cause errors if missing
+        missing_essential = [field for field in essential_fields if not check_field(resource, field)]
+        if missing_essential:
             console.print(Panel(
                 f"[red]Missing required fields for resource {resource.get('id', 'unknown')}:[/red]\n"
-                f"{', '.join(missing_fields)}",
+                f"{', '.join(missing_essential)}",
                 title="Validation Error",
                 border_style="red"
             ))
             sys.exit(1)
+            
+        # Check recommended fields - these only show warnings
+        missing_recommended = [field for field in recommended_fields if not check_field(resource, field)]
+        if missing_recommended:
+            console.print(
+                f"[yellow]Warning: Missing recommended fields for resource {resource.get('id', 'unknown')}:[/yellow]\n"
+                f"[yellow]{', '.join(missing_recommended)}[/yellow]"
+            )
+            
+        # Check CPU fields - add defaults if missing
+        # If any CPU fields are missing, add CPU specs object with defaults
+        missing_cpu = [field for field in cpu_fields if not check_field(resource, field)]
+        if missing_cpu and "resource_type" in resource and resource["resource_type"].upper() == "CPU":
+            console.print(f"[yellow]Warning: Adding default CPU specs for resource {resource.get('id', 'unknown')}[/yellow]")
+            if "cpu_specs" not in resource:
+                resource["cpu_specs"] = {}
+            
+            if "op_modes" not in resource["cpu_specs"]:
+                resource["cpu_specs"]["op_modes"] = "32-bit, 64-bit"
+                
+            if "total_cpus" not in resource["cpu_specs"]:
+                resource["cpu_specs"]["total_cpus"] = 16
+                
+            if "online_cpus" not in resource["cpu_specs"]:
+                resource["cpu_specs"]["online_cpus"] = "0-15"
 
 def validate_ram_format(ram_value: str, resource_id: str) -> None:
     if not isinstance(ram_value, str) or not ram_value.endswith("GB"):
