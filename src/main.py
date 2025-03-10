@@ -109,24 +109,32 @@ def configure_ssh_linux():
         # Check if SSH server is installed and running
         logger.info("Checking SSH server status...")
         
-        # Try systemctl first, but have fallbacks
+        # Try service command first
         try:
-            cmd = ['systemctl', 'status', 'ssh']
+            cmd = ['service', 'ssh', 'status']
             if not is_root:
                 cmd.insert(0, 'sudo')
             result = subprocess.run(cmd, capture_output=True, text=True)
-            using_systemd = True
+            using_service = True
+            using_systemd = False
+            logger.info("Using service command for SSH management")
         except (subprocess.CalledProcessError, FileNotFoundError):
-            # Try service command as fallback
+            # Try systemctl as fallback
             try:
-                cmd = ['service', 'ssh', 'status']
+                cmd = ['systemctl', 'status', 'ssh']
                 if not is_root:
                     cmd.insert(0, 'sudo')
                 result = subprocess.run(cmd, capture_output=True, text=True)
-                using_systemd = False
+                using_service = False
+                using_systemd = True
+                logger.info("Using systemctl for SSH management")
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Final fallback - check if sshd process is running
                 result = subprocess.run(['pgrep', 'sshd'], capture_output=True, text=True)
+                using_service = False
+                using_systemd = False
+                logger.info("Neither service nor systemctl available, using direct commands")
+                
                 if result.returncode != 0:
                     # Assume SSH is not installed or not running
                     logger.info("SSH server appears to be not running or not installed.")
@@ -150,11 +158,31 @@ def configure_ssh_linux():
                         except subprocess.CalledProcessError as e:
                             logger.error(f"Failed to install SSH server: {e}")
                             return False
-                using_systemd = False
         
         # Start and enable SSH service based on available commands
         logger.info("Starting SSH service...")
-        if using_systemd:
+        if using_service:
+            try:
+                cmd = ['service', 'ssh', 'start']
+                if not is_root:
+                    cmd.insert(0, 'sudo')
+                subprocess.run(cmd, check=True)
+                # For service command, we need to ensure it starts on boot
+                # Check for common init systems
+                if Path('/etc/init.d').exists():
+                    cmd = ['update-rc.d', 'ssh', 'defaults']
+                    if not is_root:
+                        cmd.insert(0, 'sudo')
+                    try:
+                        subprocess.run(cmd, check=True)
+                        logger.info("SSH service configured to start on boot")
+                    except subprocess.CalledProcessError:
+                        logger.warning("Could not configure SSH to start on boot with update-rc.d")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to start SSH with service command: {e}")
+                using_service = False
+        
+        if not using_service and using_systemd:
             try:
                 cmd_start = ['systemctl', 'start', 'ssh']
                 cmd_enable = ['systemctl', 'enable', 'ssh']
@@ -167,23 +195,16 @@ def configure_ssh_linux():
                 logger.error(f"Failed to start SSH with systemctl: {e}")
                 using_systemd = False
         
-        if not using_systemd:
-            # Try service command
+        if not using_service and not using_systemd:
+            # Direct sshd invocation
             try:
-                cmd = ['service', 'ssh', 'start']
+                cmd = ['/usr/sbin/sshd']
                 if not is_root:
                     cmd.insert(0, 'sudo')
                 subprocess.run(cmd, check=True)
-            except subprocess.CalledProcessError:
-                try:
-                    # Try direct command
-                    cmd = ['/usr/sbin/sshd']
-                    if not is_root:
-                        cmd.insert(0, 'sudo')
-                    subprocess.run(cmd, check=True)
-                except subprocess.CalledProcessError as e:
-                    logger.error(f"Failed to start SSH service using alternatives: {e}")
-                    return False
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to start SSH service using direct command: {e}")
+                return False
             
             # For startup on boot without systemd
             # Add to /etc/rc.local if it exists
