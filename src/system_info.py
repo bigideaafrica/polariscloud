@@ -223,7 +223,10 @@ def get_system_info(resource_type=None):
         ram = get_system_ram_gb()
         storage = get_storage_info()
 
-        # Base resource without cpu_specs or gpu_specs
+        # Always get CPU info regardless of resource type
+        cpu_specs = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
+        
+        # Base resource with cpu_specs
         resource = {
             "id": resource_id,
             "resource_type": resource_type.upper(),
@@ -231,13 +234,12 @@ def get_system_info(resource_type=None):
             "hourly_price": 0.0,
             "ram": ram,
             "storage": storage,
-            "is_active": True
+            "is_active": True,
+            "cpu_specs": cpu_specs  # Always include CPU specs
         }
 
-        # Add the appropriate specs based on resource type
-        if resource_type.upper() == "CPU":
-            resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
-        elif resource_type.upper() == "GPU":
+        # Add GPU specs if this is a GPU resource
+        if resource_type.upper() == "GPU":
             resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
 
         return {

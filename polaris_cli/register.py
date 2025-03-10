@@ -160,11 +160,69 @@ def check_commune_balance(key_name: str, required: float = 10.0):
     return (balance, balance >= required)
 
 def process_compute_resource(resource: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    # Get CPU specs with fallbacks for any missing values
+    cpu_specs = resource.get("cpu_specs", {})
+    
+    # Default values for CPU specs
+    default_cpu_specs = {
+        "op_modes": "32-bit, 64-bit",
+        "address_sizes": "48 bits physical, 48 bits virtual",
+        "byte_order": "Little Endian",
+        "total_cpus": 32,
+        "online_cpus": "0-15",
+        "vendor_id": "AuthenticAMD",
+        "cpu_name": "CPU Processor",
+        "cpu_family": 25,
+        "model": 1,
+        "threads_per_core": 2,
+        "cores_per_socket": 16,
+        "sockets": 1,
+        "stepping": 1,
+        "cpu_max_mhz": 3000.0,
+        "cpu_min_mhz": 2000.0
+    }
+    
+    # Merge default values with existing values
+    processed_cpu_specs = {
+        "op_modes": cpu_specs.get("op_modes", default_cpu_specs["op_modes"]),
+        "address_sizes": cpu_specs.get("address_sizes", default_cpu_specs["address_sizes"]),
+        "byte_order": cpu_specs.get("byte_order", default_cpu_specs["byte_order"]),
+        "total_cpus": cpu_specs.get("total_cpus", default_cpu_specs["total_cpus"]),
+        "online_cpus": process_online_cpus(
+            cpu_specs.get("online_cpus", default_cpu_specs["online_cpus"]),
+            resource.get("id")
+        ),
+        "vendor_id": cpu_specs.get("vendor_id", default_cpu_specs["vendor_id"]),
+        "cpu_name": cpu_specs.get("cpu_name", default_cpu_specs["cpu_name"]),
+        "cpu_family": cpu_specs.get("cpu_family", default_cpu_specs["cpu_family"]),
+        "model": cpu_specs.get("model", default_cpu_specs["model"]),
+        "threads_per_core": cpu_specs.get("threads_per_core", default_cpu_specs["threads_per_core"]),
+        "cores_per_socket": cpu_specs.get("cores_per_socket", default_cpu_specs["cores_per_socket"]),
+        "sockets": cpu_specs.get("sockets", default_cpu_specs["sockets"]),
+        "stepping": process_stepping(
+            cpu_specs.get("stepping", default_cpu_specs["stepping"]),
+            resource.get("id")
+        ),
+        "cpu_max_mhz": cpu_specs.get("cpu_max_mhz", default_cpu_specs["cpu_max_mhz"]),
+        "cpu_min_mhz": cpu_specs.get("cpu_min_mhz", default_cpu_specs["cpu_min_mhz"])
+    }
+
+    # Get GPU specs if present
+    gpu_specs = None
+    if resource.get("gpu_specs"):
+        gpu_specs = {
+            "gpu_name": resource.get("gpu_specs", {}).get("gpu_name", "NVIDIA GeForce RTX 4090"),
+            "memory_size": resource.get("gpu_specs", {}).get("memory_size", "24GB"),
+            "cuda_cores": resource.get("gpu_specs", {}).get("cuda_cores"),
+            "clock_speed": resource.get("gpu_specs", {}).get("clock_speed", "1500MHz"),
+            "power_consumption": resource.get("gpu_specs", {}).get("power_consumption", "450W")
+        }
+    
+    result = {
         "id": resource.get("id"),
         "resource_type": resource.get("resource_type"),
         "location": resource.get("location"),
-        "hourly_price": resource.get("hourly_price"),
+        "hourly_price": resource.get("hourly_price", 0.0),
         "ram": resource.get("ram"),
         "storage": {
             "type": resource.get("storage", {}).get("type"),
@@ -172,29 +230,7 @@ def process_compute_resource(resource: Dict[str, Any]) -> Dict[str, Any]:
             "read_speed": resource.get("storage", {}).get("read_speed"),
             "write_speed": resource.get("storage", {}).get("write_speed")
         },
-        "cpu_specs": {
-            "op_modes": resource.get("cpu_specs", {}).get("op_modes"),
-            "address_sizes": resource.get("cpu_specs", {}).get("address_sizes"),
-            "byte_order": resource.get("cpu_specs", {}).get("byte_order"),
-            "total_cpus": resource.get("cpu_specs", {}).get("total_cpus"),
-            "online_cpus": process_online_cpus(
-                resource.get("cpu_specs", {}).get("online_cpus"),
-                resource.get("id")
-            ),
-            "vendor_id": resource.get("cpu_specs", {}).get("vendor_id"),
-            "cpu_name": resource.get("cpu_specs", {}).get("cpu_name"),
-            "cpu_family": resource.get("cpu_specs", {}).get("cpu_family"),
-            "model": resource.get("cpu_specs", {}).get("model"),
-            "threads_per_core": resource.get("cpu_specs", {}).get("threads_per_core"),
-            "cores_per_socket": resource.get("cpu_specs", {}).get("cores_per_socket"),
-            "sockets": resource.get("cpu_specs", {}).get("sockets"),
-            "stepping": process_stepping(
-                resource.get("cpu_specs", {}).get("stepping"),
-                resource.get("id")
-            ),
-            "cpu_max_mhz": resource.get("cpu_specs", {}).get("cpu_max_mhz"),
-            "cpu_min_mhz": resource.get("cpu_specs", {}).get("cpu_min_mhz")
-        },
+        "cpu_specs": processed_cpu_specs,
         "network": {
             "internal_ip": resource.get("network", {}).get("internal_ip"),
             "ssh": process_ssh(resource.get("network", {}).get("ssh")),
@@ -203,6 +239,12 @@ def process_compute_resource(resource: Dict[str, Any]) -> Dict[str, Any]:
             "open_ports": resource.get("network", {}).get("open_ports", ["22"])
         }
     }
+    
+    # Add GPU specs if present
+    if gpu_specs and resource.get("resource_type", "").upper() == "GPU":
+        result["gpu_specs"] = gpu_specs
+        
+    return result
 
 def process_stepping(stepping: Any, resource_id: str) -> int:
     if stepping is None:
