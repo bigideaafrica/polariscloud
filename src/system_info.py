@@ -317,23 +317,111 @@ def get_system_info(resource_type=None):
     
 def has_gpu():
     """Detect if system has a GPU."""
+    logger.info("Checking for GPU presence...")
     try:
         if is_windows():
+            logger.info("Detecting GPU on Windows...")
             ps_cmd = ["powershell", "-Command", """
-                $gpu = Get-CimInstance win32_VideoController | Where-Object { $_.AdapterRAM -ne $null };
-                if ($gpu) { ConvertTo-Json $true } else { ConvertTo-Json $false }
+                $gpu = Get-CimInstance win32_VideoController | Where-Object { $_.AdapterRAM -ne $null -or $_.Name -match 'NVIDIA|AMD|Radeon|GeForce' };
+                if ($gpu) { 
+                    Write-Output "GPU Found: $($gpu.Name)";
+                    ConvertTo-Json $true 
+                } else { 
+                    Write-Output "No GPU found"; 
+                    ConvertTo-Json $false 
+                }
             """]
             r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
-            return json.loads(r.stdout)
+            logger.info(f"Windows GPU detection output: {r.stdout.strip()}")
+            result = json.loads(r.stdout.strip().split('\n')[-1])
+            return result
         else:
+            # Linux GPU detection
+            logger.info("Detecting GPU on Linux...")
+            
             # Try nvidia-smi first
             try:
-                subprocess.run(["nvidia-smi"], capture_output=True, check=True)
-                return True
-            except:
-                # Check for any graphics card using lspci
-                r = subprocess.run(["lspci"], capture_output=True, text=True, check=True)
-                return any("VGA" in line or "3D" in line for line in r.stdout.splitlines())
+                logger.info("Checking for NVIDIA GPU with nvidia-smi...")
+                nvidia_output = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], 
+                                             capture_output=True, text=True, timeout=5)
+                
+                if nvidia_output.returncode == 0 and nvidia_output.stdout.strip():
+                    gpu_names = nvidia_output.stdout.strip().split('\n')
+                    logger.info(f"NVIDIA GPUs found: {gpu_names}")
+                    return True
+                else:
+                    logger.info("nvidia-smi completed but returned no GPUs or failed")
+            except subprocess.TimeoutExpired:
+                logger.warning("nvidia-smi command timed out")
+            except subprocess.SubprocessError as e:
+                logger.warning(f"nvidia-smi command failed: {e}")
+            except FileNotFoundError:
+                logger.info("nvidia-smi not found, checking for other GPUs...")
+            
+            # Check for AMD GPUs
+            try:
+                logger.info("Checking for AMD GPU with rocm-smi...")
+                amd_output = subprocess.run(["rocm-smi", "--showproductname"], 
+                                          capture_output=True, text=True, timeout=5)
+                
+                if amd_output.returncode == 0 and "GPU" in amd_output.stdout:
+                    logger.info(f"AMD GPU found: {amd_output.stdout.strip()}")
+                    return True
+            except (subprocess.SubprocessError, FileNotFoundError):
+                logger.info("rocm-smi not found or failed")
+            
+            # Try lspci as a fallback for any GPU
+            try:
+                logger.info("Checking for any GPU with lspci...")
+                lspci_output = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5)
+                
+                if lspci_output.returncode == 0:
+                    # Look for graphics-related entries
+                    gpu_lines = [line for line in lspci_output.stdout.splitlines() 
+                               if any(keyword in line for keyword in ["VGA", "3D", "Display", "Graphics"])]
+                    
+                    # Check for known GPU vendors
+                    gpu_vendors = ["NVIDIA", "AMD", "ATI", "Intel", "Radeon", "GeForce", "Matrox"]
+                    has_vendor_gpu = any(vendor.lower() in line.lower() for line in gpu_lines 
+                                       for vendor in gpu_vendors)
+                    
+                    if has_vendor_gpu:
+                        logger.info(f"GPU found with lspci: {[line for line in gpu_lines if any(vendor.lower() in line.lower() for vendor in gpu_vendors)]}")
+                        return True
+                    elif gpu_lines:
+                        logger.info(f"Generic graphics adapter found: {gpu_lines}")
+                        return True
+                    else:
+                        logger.info("No GPU found in lspci output")
+            except (subprocess.SubprocessError, FileNotFoundError):
+                logger.warning("lspci not found or failed")
+                
+            # Direct check for device files
+            try:
+                gpu_devices = []
+                
+                # Check for NVIDIA GPU device files
+                for i in range(8):  # Check for up to 8 GPUs
+                    if os.path.exists(f"/dev/nvidia{i}"):
+                        gpu_devices.append(f"/dev/nvidia{i}")
+                
+                # Check for device files used by AMD or Intel GPUs 
+                if os.path.exists("/dev/dri"):
+                    dri_devices = subprocess.run(["ls", "-la", "/dev/dri"], 
+                                               capture_output=True, text=True).stdout
+                    if "renderD" in dri_devices or "card" in dri_devices:
+                        logger.info(f"GPU device files found in /dev/dri: {dri_devices}")
+                        return True
+                
+                if gpu_devices:
+                    logger.info(f"NVIDIA GPU device files found: {gpu_devices}")
+                    return True
+            except Exception as e:
+                logger.warning(f"Error checking GPU device files: {e}")
+                
+            logger.info("No GPU detected on this system")
+            return False
     except Exception as e:
         logger.error(f"Failed to detect GPU: {e}")
+        # In case of any unexpected error, fall back to False
         return False
