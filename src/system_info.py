@@ -86,12 +86,41 @@ def get_cpu_info_linux():
             if len(parts) == 2:
                 info[parts[0].strip()] = parts[1].strip()
 
+        # Process and validate online_cpus format
+        online_cpus = info.get("On-line CPU(s) list", "")
+        
+        # Ensure online_cpus is in one of the expected formats
+        if online_cpus:
+            # If it contains commas, try to convert to a list of integers
+            if "," in online_cpus:
+                try:
+                    # Split by commas and convert to list of integers
+                    cpu_list = [int(cpu.strip()) for cpu in online_cpus.split(",") if "-" not in cpu]
+                    
+                    # Handle ranges like "0-7,16-23"
+                    for part in online_cpus.split(","):
+                        if "-" in part:
+                            start, end = map(int, part.split("-"))
+                            cpu_list.extend(range(start, end + 1))
+                    
+                    # Sort and remove duplicates
+                    cpu_list = sorted(set(cpu_list))
+                    online_cpus = cpu_list
+                except ValueError:
+                    # If conversion fails, use a simple range format
+                    total_cpus = int(info.get("CPU(s)", 0))
+                    if total_cpus > 0:
+                        online_cpus = f"0-{total_cpus - 1}"
+            # If it's already in the format "0-N", ensure it's properly formatted
+            elif "-" in online_cpus and not online_cpus.startswith("'") and not online_cpus.endswith("'"):
+                online_cpus = f"'{online_cpus}'"
+
         return {
             "op_modes": info.get("CPU op-mode(s)"),
             "address_sizes": info.get("Address sizes"),
             "byte_order": info.get("Byte Order"),
             "total_cpus": int(info.get("CPU(s)", 0)),
-            "online_cpus": info.get("On-line CPU(s) list", ""),
+            "online_cpus": online_cpus,
             "vendor_id": info.get("Vendor ID"),
             "cpu_name": info.get("Model name"),
             "cpu_family": int(info.get("CPU family", 0)),
