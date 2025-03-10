@@ -224,6 +224,7 @@ def get_cpu_info(ssh_client: SSHClient) -> Dict[str, Any]:
 def get_gpu_info(ssh_client: SSHClient) -> List[Dict[str, Any]]:
     """
     Retrieve GPU information from the miner.
+    This function detects NVIDIA, AMD, and Intel GPUs.
     
     Args:
         ssh_client: Connected SSH client
@@ -231,52 +232,148 @@ def get_gpu_info(ssh_client: SSHClient) -> List[Dict[str, Any]]:
     Returns:
         List of dictionaries with GPU information
     """
-    # Check if nvidia-smi is available
-    stdout, _, exit_code = ssh_client.execute_command("which nvidia-smi")
-    
-    if exit_code != 0:
-        logger.info("nvidia-smi not found, no NVIDIA GPUs available")
-        return []
-    
-    # Get GPU information in JSON format
-    stdout, stderr, exit_code = ssh_client.execute_command(
-        "nvidia-smi --query-gpu=name,memory.total,utilization.gpu --format=csv,noheader"
-    )
-    
-    if exit_code != 0:
-        logger.warning(f"Error getting GPU info: {stderr}")
-        return []
-    
     gpus = []
     
-    # Parse CSV output
-    for line in stdout.strip().split('\n'):
-        if not line:
-            continue
+    # 1. Try NVIDIA detection first
+    stdout, _, exit_code = ssh_client.execute_command("which nvidia-smi")
+    
+    if exit_code == 0:
+        # Get GPU information in CSV format
+        stdout, stderr, exit_code = ssh_client.execute_command(
+            "nvidia-smi --query-gpu=name,memory.total,utilization.gpu --format=csv,noheader"
+        )
         
-        parts = [part.strip() for part in line.split(',')]
+        if exit_code == 0:
+            # Parse CSV output
+            for line in stdout.strip().split('\n'):
+                if not line:
+                    continue
+                
+                parts = [part.strip() for part in line.split(',')]
+                
+                if len(parts) >= 2:
+                    gpu_name = parts[0].strip()
+                    
+                    # Extract memory (convert MiB to MB)
+                    memory_match = re.search(r'(\d+)\s*MiB', parts[1])
+                    memory_mb = 0
+                    if memory_match:
+                        memory_mb = int(memory_match.group(1))
+                    
+                    # Extract utilization if available
+                    utilization = 0
+                    if len(parts) >= 3:
+                        util_match = re.search(r'(\d+)\s*%', parts[2])
+                        if util_match:
+                            utilization = int(util_match.group(1))
+                    
+                    gpus.append({
+                        'name': gpu_name,
+                        'memory': memory_mb,
+                        'utilization': utilization,
+                        'type': 'NVIDIA'
+                    })
+            
+            logger.info(f"Found {len(gpus)} NVIDIA GPUs")
+        else:
+            logger.warning(f"Error getting NVIDIA GPU info: {stderr}")
+    
+    # 2. Try AMD detection
+    stdout, _, exit_code = ssh_client.execute_command("which rocm-smi")
+    
+    if exit_code == 0:
+        # AMD GPU detection via rocm-smi
+        stdout, stderr, exit_code = ssh_client.execute_command("rocm-smi --showmeminfo vram --csv")
         
-        if len(parts) >= 2:
-            gpu_name = parts[0].strip()
+        if exit_code == 0:
+            lines = stdout.strip().split('\n')
+            # Skip header row
+            if len(lines) > 1:
+                for line in lines[1:]:
+                    parts = line.split(',')
+                    if len(parts) >= 3:  # Adjust based on actual output format
+                        try:
+                            gpu_id = parts[0].strip()
+                            # Memory is usually in bytes, convert to MB
+                            memory_mb = int(int(parts[2].strip()) / (1024 * 1024))
+                            
+                            # Get GPU name from additional command
+                            name_cmd = f"rocm-smi -d {gpu_id} --showproductname"
+                            name_stdout, _, _ = ssh_client.execute_command(name_cmd)
+                            gpu_name = name_stdout.strip() if name_stdout else f"AMD GPU {gpu_id}"
+                            
+                            gpus.append({
+                                'name': gpu_name,
+                                'memory': memory_mb,
+                                'utilization': 0,  # Default value
+                                'type': 'AMD'
+                            })
+                        except Exception as e:
+                            logger.warning(f"Error parsing AMD GPU info: {e}")
             
-            # Extract memory (convert MiB to MB)
-            memory_match = re.search(r'(\d+)\s*MiB', parts[1])
-            memory_mb = 0
-            if memory_match:
-                memory_mb = int(memory_match.group(1))
+            logger.info(f"Found {len(gpus) - len([g for g in gpus if g.get('type') == 'NVIDIA'])} AMD GPUs")
+        else:
+            logger.warning(f"Error getting AMD GPU info: {stderr}")
+    
+    # 3. Use lspci as a fallback to detect any GPUs not captured above
+    stdout, stderr, exit_code = ssh_client.execute_command("which lspci")
+    
+    if exit_code == 0:
+        # Use lspci to detect GPUs (will detect all types, including Intel)
+        stdout, stderr, exit_code = ssh_client.execute_command("lspci -v -nn | grep -E 'VGA|3D|Display'")
+        
+        if exit_code == 0:
+            # Extract GPU names and check if they're already in our list
+            existing_gpu_names = {gpu['name'].lower() for gpu in gpus}
             
-            # Extract utilization if available
-            utilization = 0
-            if len(parts) >= 3:
-                util_match = re.search(r'(\d+)\s*%', parts[2])
-                if util_match:
-                    utilization = int(util_match.group(1))
+            for line in stdout.strip().split('\n'):
+                if not line:
+                    continue
+                
+                # Extract GPU type and name
+                gpu_type = 'Unknown'
+                if 'nvidia' in line.lower():
+                    gpu_type = 'NVIDIA'
+                elif 'amd' in line.lower() or 'radeon' in line.lower() or 'ati' in line.lower():
+                    gpu_type = 'AMD'
+                elif 'intel' in line.lower():
+                    gpu_type = 'Intel'
+                
+                # Check if we already have this GPU type in our list
+                gpu_name = line.strip()
+                if not any(gpu_type.lower() in existing_name for existing_name in existing_gpu_names):
+                    gpus.append({
+                        'name': gpu_name,
+                        'memory': 0,  # Unknown memory
+                        'utilization': 0,
+                        'type': gpu_type
+                    })
             
-            gpus.append({
-                'name': gpu_name,
-                'memory': memory_mb,
-                'utilization': utilization
-            })
+            logger.info(f"Total GPUs found with lspci: {len(stdout.strip().split('\n'))}")
+    
+    # If still no GPUs found, try a more aggressive lspci search
+    if not gpus:
+        stdout, stderr, exit_code = ssh_client.execute_command("lspci | grep -i 'vga\\|3d\\|display\\|graphic'")
+        
+        if exit_code == 0 and stdout.strip():
+            for line in stdout.strip().split('\n'):
+                if not line:
+                    continue
+                
+                gpu_type = 'Unknown'
+                if 'nvidia' in line.lower():
+                    gpu_type = 'NVIDIA'
+                elif 'amd' in line.lower() or 'radeon' in line.lower() or 'ati' in line.lower():
+                    gpu_type = 'AMD'
+                elif 'intel' in line.lower():
+                    gpu_type = 'Intel'
+                
+                gpus.append({
+                    'name': line.strip(),
+                    'memory': 0,  # Unknown memory
+                    'utilization': 0,
+                    'type': gpu_type
+                })
     
     return gpus
 
