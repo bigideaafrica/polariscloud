@@ -6,6 +6,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
 
@@ -101,25 +102,74 @@ def configure_ssh():
 def configure_ssh_linux():
     """Configure SSH server on Linux."""
     try:
-        # Check if SSH server is installed
-        result = subprocess.run(['systemctl', 'status', 'ssh'], capture_output=True, text=True)
-        if result.returncode != 0:
-            # Install SSH server if not present
-            logger.info("Installing SSH server...")
-            subprocess.run(['apt-get', 'update'], check=True)
-            subprocess.run(['apt-get', 'install', '-y', 'openssh-server'], check=True)
+        # Check if SSH server is installed and running
+        logger.info("Checking SSH server status...")
         
-        # Start and enable SSH service
-        subprocess.run(['systemctl', 'start', 'ssh'], check=True)
-        subprocess.run(['systemctl', 'enable', 'ssh'], check=True)
+        # Try systemctl first, but have fallbacks
+        try:
+            result = subprocess.run(['systemctl', 'status', 'ssh'], capture_output=True, text=True)
+            using_systemd = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Try service command as fallback
+            try:
+                result = subprocess.run(['service', 'ssh', 'status'], capture_output=True, text=True)
+                using_systemd = False
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Final fallback - check if sshd process is running
+                result = subprocess.run(['pgrep', 'sshd'], capture_output=True, text=True)
+                if result.returncode != 0:
+                    # Assume SSH is not installed or not running
+                    logger.info("SSH server appears to be not running or not installed.")
+                    # Install SSH server if not present
+                    logger.info("Installing SSH server...")
+                    try:
+                        subprocess.run(['apt-get', 'update'], check=True)
+                        subprocess.run(['apt-get', 'install', '-y', 'openssh-server'], check=True)
+                    except subprocess.CalledProcessError:
+                        try:
+                            # Try with yum for Red Hat-based systems
+                            subprocess.run(['yum', 'install', '-y', 'openssh-server'], check=True)
+                        except subprocess.CalledProcessError as e:
+                            logger.error(f"Failed to install SSH server: {e}")
+                            return False
+                using_systemd = False
+        
+        # Start and enable SSH service based on available commands
+        logger.info("Starting SSH service...")
+        if using_systemd:
+            try:
+                subprocess.run(['systemctl', 'start', 'ssh'], check=True)
+                subprocess.run(['systemctl', 'enable', 'ssh'], check=True)
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to start SSH with systemctl: {e}")
+                using_systemd = False
+        
+        if not using_systemd:
+            # Try service command
+            try:
+                subprocess.run(['service', 'ssh', 'start'], check=True)
+            except subprocess.CalledProcessError:
+                try:
+                    # Try direct command
+                    subprocess.run(['/usr/sbin/sshd'], check=True)
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to start SSH service using alternatives: {e}")
+                    return False
+            
+            # For startup on boot without systemd
+            # Add to /etc/rc.local if it exists
+            rc_local = Path('/etc/rc.local')
+            if rc_local.exists():
+                content = rc_local.read_text()
+                if '/usr/sbin/sshd' not in content:
+                    with open('/etc/rc.local', 'a') as f:
+                        f.write('\n# Start SSH server\n/usr/sbin/sshd\n')
+                    subprocess.run(['chmod', '+x', '/etc/rc.local'], check=True)
         
         logger.info("SSH server configured successfully on Linux.")
         return True
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to configure SSH server on Linux: {e}")
-        return False
     except Exception as e:
-        logger.error(f"Error configuring SSH server: {e}")
+        logger.error(f"Failed to configure SSH on Linux: {e}")
         return False
 
 def configure_ssh_windows():
