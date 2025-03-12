@@ -6,6 +6,8 @@ import signal
 import subprocess
 import sys
 import time
+import re
+import tempfile
 
 import requests
 
@@ -93,8 +95,11 @@ def run_as_admin():
 
 def configure_ssh():
     """Configure SSH server for the current platform."""
-    if platform.system().lower() == 'windows':
+    system = platform.system().lower()
+    if system == 'windows':
         return configure_ssh_windows()
+    elif system == 'darwin':  # macOS
+        return configure_ssh_macos()
     else:
         return configure_ssh_linux()
 
@@ -186,10 +191,78 @@ def create_ssh_directory_windows():
         logger.error(f"Failed to create SSH directory: {e}")
         return False
 
+def configure_ssh_macos():
+    """Configure SSH server on macOS."""
+    try:
+        # Check if SSH server is already running
+        result = subprocess.run(['sudo', 'launchctl', 'list', 'com.openssh.sshd'], capture_output=True, text=True)
+        
+        # Start SSH service if not running
+        if result.returncode != 0:
+            logger.info("Starting SSH server on macOS...")
+            subprocess.run(['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
+        
+        # Ensure SSH is enabled in System Preferences (using touch command as trigger)
+        subprocess.run(['sudo', 'touch', '/etc/ssh/sshd_config'], check=True)
+        
+        # Update SSH configuration if needed
+        ssh_port = os.environ.get('SSH_PORT', '22')
+        ssh_config_path = '/etc/ssh/sshd_config'
+        
+        # Create backup of original config
+        subprocess.run(['sudo', 'cp', ssh_config_path, f'{ssh_config_path}.bak'], check=True)
+        
+        # Read current config
+        result = subprocess.run(['sudo', 'cat', ssh_config_path], capture_output=True, text=True, check=True)
+        current_config = result.stdout
+        
+        # Ensure necessary settings are present
+        required_settings = [
+            f'Port {ssh_port}',
+            'PermitRootLogin yes',
+            'PasswordAuthentication yes'
+        ]
+        
+        new_config = current_config
+        for setting in required_settings:
+            key = setting.split()[0]
+            if key in new_config:
+                # Replace existing setting
+                pattern = rf'{key}\s+\w+'
+                new_config = re.sub(pattern, setting, new_config)
+            else:
+                # Add new setting
+                new_config += f'\n{setting}'
+        
+        # Write updated config
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+            temp_file.write(new_config)
+            temp_path = temp_file.name
+        
+        subprocess.run(['sudo', 'cp', temp_path, ssh_config_path], check=True)
+        subprocess.run(['sudo', 'chmod', '644', ssh_config_path], check=True)
+        os.unlink(temp_path)
+        
+        # Restart SSH service to apply changes
+        subprocess.run(['sudo', 'launchctl', 'unload', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
+        subprocess.run(['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
+        
+        logger.info("SSH server configured successfully on macOS.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to configure SSH server on macOS: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error configuring SSH server on macOS: {e}")
+        return False
+
 def setup_firewall():
     """Configure firewall based on platform."""
-    if platform.system().lower() == 'windows':
+    system = platform.system().lower()
+    if system == 'windows':
         return setup_firewall_windows()
+    elif system == 'darwin':  # macOS
+        return setup_firewall_macos()
     else:
         return setup_firewall_linux()
 
@@ -229,7 +302,57 @@ def setup_firewall_windows():
     except Exception as e:
         logger.warning(f"Error configuring firewall: {e}")
         return False
-    
+
+def setup_firewall_macos():
+    """Configure macOS firewall to allow SSH connections."""
+    try:
+        ssh_port = os.environ.get('SSH_PORT', '22')
+        
+        # Enable macOS firewall
+        logger.info("Configuring macOS firewall...")
+        
+        # Check if firewall is already enabled
+        result = subprocess.run(
+            ['sudo', '/usr/libexec/ApplicationFirewall/socketfilterfw', '--getglobalstate'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # If firewall is not enabled, enable it
+        if "disabled" in result.stdout.lower():
+            subprocess.run(
+                ['sudo', '/usr/libexec/ApplicationFirewall/socketfilterfw', '--setglobalstate', 'on'],
+                check=True
+            )
+        
+        # Allow SSH server
+        subprocess.run(
+            ['sudo', '/usr/libexec/ApplicationFirewall/socketfilterfw', '--add', '/usr/sbin/sshd'],
+            check=True
+        )
+        
+        # Allow incoming connections
+        subprocess.run(
+            ['sudo', '/usr/libexec/ApplicationFirewall/socketfilterfw', '--unblockapp', '/usr/sbin/sshd'],
+            check=True
+        )
+        
+        # Update firewall rules
+        subprocess.run(['sudo', 'defaults', 'write', '/Library/Preferences/com.apple.alf', 'globalstate', '-int', '1'], check=True)
+        
+        # Restart firewall to apply changes
+        subprocess.run(['sudo', 'pkill', '-HUP', 'socketfilterfw'], check=True)
+        
+        logger.info("macOS firewall configured to allow SSH connections.")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to configure macOS firewall: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Error configuring firewall: {e}")
+        return False
+
 def format_network_info(username: str, password: str) -> dict:
     
     ssh_user = os.environ.get('SSH_USER')

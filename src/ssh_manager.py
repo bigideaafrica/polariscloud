@@ -3,6 +3,9 @@ import logging
 import platform
 import subprocess
 import time
+import re
+import tempfile
+import os
 from pathlib import Path
 
 from . import config, utils
@@ -12,12 +15,26 @@ class SSHManager:
     def __init__(self):
         self.logger = logging.getLogger('remote_access')
         self.is_windows = platform.system().lower() == 'windows'
+        self.is_macos = platform.system().lower() == 'darwin'
         
     def _check_linux_ssh_installed(self):
         """Check if OpenSSH is already installed on Linux"""
         try:
             result = subprocess.run(
                 ['dpkg', '-s', 'openssh-server'],
+                capture_output=True,
+                text=True
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+            
+    def _check_macos_ssh_installed(self):
+        """Check if OpenSSH is already installed on macOS"""
+        try:
+            # On macOS, SSH is pre-installed, just check if the service file exists
+            result = subprocess.run(
+                ['ls', '/System/Library/LaunchDaemons/ssh.plist'],
                 capture_output=True,
                 text=True
             )
@@ -58,6 +75,23 @@ class SSHManager:
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Failed to install OpenSSH: {e}")
                 raise RuntimeError("Failed to install OpenSSH server") from e
+                
+    def _install_macos_ssh(self):
+        """Setup OpenSSH on macOS with error handling"""
+        try:
+            # On macOS, SSH is pre-installed, just need to ensure the service is enabled
+            self.logger.info("Enabling SSH service on macOS...")
+            subprocess.run(
+                ['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            # Create SSH directory if it doesn't exist
+            subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to enable SSH service on macOS: {e}")
+            raise RuntimeError("Failed to setup SSH server on macOS") from e
 
     def create_sshd_config(self, port):
         if self.is_windows:
@@ -71,6 +105,18 @@ PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 UsePAM yes
 Subsystem sftp sftp-server.exe
+"""
+        elif self.is_macos:
+            config_content = f"""
+# SSH Server Configuration
+Port {port}
+PermitRootLogin yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+Subsystem sftp /usr/libexec/sftp-server
 """
         else:
             config_content = f"""
@@ -108,6 +154,10 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             if self.is_windows:
                 utils.run_elevated('powershell -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"')
                 utils.run_elevated('mkdir "C:\\ProgramData\\ssh" 2>NUL')
+            elif self.is_macos:
+                if not self._check_macos_ssh_installed():
+                    self._install_macos_ssh()
+                subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
             else:
                 if not self._check_linux_ssh_installed():
                     self._install_linux_ssh()
@@ -124,6 +174,9 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             
             if self.is_windows:
                 utils.run_elevated('powershell -Command "Set-Service -Name sshd -StartupType Automatic"')
+            elif self.is_macos:
+                # On macOS, we already enabled the service with launchctl load -w
+                pass
             else:
                 subprocess.run(['sudo', 'systemctl', 'enable', 'ssh'], check=True)
                 
@@ -153,15 +206,27 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     utils.run_elevated(cmd)
                     time.sleep(1)
             else:
-                # Set password using chpasswd
-                chpasswd_proc = subprocess.Popen(
-                    ['sudo', 'chpasswd'],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                chpasswd_proc.communicate(input=f'{username}:{password}\n')
+                # Set password using chpasswd for Linux or dscl for macOS
+                if self.is_macos:
+                    # On macOS, use dscl to set password
+                    dscl_proc = subprocess.Popen(
+                        ['sudo', 'dscl', '.', '-passwd', f'/Users/{username}', password],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    dscl_proc.communicate()
+                else:
+                    # On Linux, use chpasswd
+                    chpasswd_proc = subprocess.Popen(
+                        ['sudo', 'chpasswd'],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    chpasswd_proc.communicate(input=f'{username}:{password}\n')
                 
                 # Ensure .ssh directory exists with correct permissions
                 ssh_dir = Path.home() / '.ssh'
@@ -189,6 +254,8 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     text=True
                 )
                 stop_cmd.communicate(input='y\n')
+            elif self.is_macos:
+                subprocess.run(['sudo', 'launchctl', 'unload', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
             else:
                 subprocess.run(['sudo', 'systemctl', 'stop', 'ssh'], check=True)
             time.sleep(2)
@@ -207,6 +274,8 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     text=True
                 )
                 start_cmd.communicate(input='y\n')
+            elif self.is_macos:
+                subprocess.run(['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
             else:
                 subprocess.run(['sudo', 'systemctl', 'start', 'ssh'], check=True)
             time.sleep(2)

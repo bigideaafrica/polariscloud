@@ -19,6 +19,9 @@ def is_windows():
 def is_linux():
     return platform.system().lower() == "linux"
 
+def is_macos():
+    return platform.system().lower() == "darwin"
+
 def get_location():
     try:
         r = requests.get("http://ipinfo.io/json", timeout=5)
@@ -107,6 +110,64 @@ def get_cpu_info_linux():
         logger.error(f"Failed to get Linux CPU info: {e}")
         return None
 
+def get_cpu_info_macos():
+    try:
+        # Get CPU details using sysctl
+        cpu_model = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
+        cores = int(subprocess.check_output(['sysctl', '-n', 'hw.physicalcpu']).decode().strip())
+        threads = int(subprocess.check_output(['sysctl', '-n', 'hw.logicalcpu']).decode().strip())
+        family = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.family']).decode().strip()
+        stepping = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.stepping']).decode().strip()
+        
+        # Get CPU architecture
+        arch_raw = subprocess.check_output(['uname', '-m']).decode().strip()
+        if arch_raw == 'x86_64':
+            architecture = '64-bit'
+        elif arch_raw == 'arm64':
+            architecture = 'ARM64'
+        else:
+            architecture = arch_raw
+            
+        # Get CPU manufacturer
+        if 'Intel' in cpu_model:
+            manufacturer = 'Intel'
+        elif 'AMD' in cpu_model:
+            manufacturer = 'AMD'
+        elif arch_raw == 'arm64':
+            manufacturer = 'Apple'
+        else:
+            manufacturer = 'Unknown'
+            
+        # Get CPU speed
+        try:
+            speed_mhz = float(subprocess.check_output(['sysctl', '-n', 'hw.cpufrequency']).decode().strip()) / 1000000
+        except:
+            # Some older versions don't have this sysctl
+            speed_mhz = 0
+            
+        return {
+            'name': cpu_model,
+            'manufacturer': manufacturer,
+            'cores': cores,
+            'threads': threads,
+            'architecture': architecture,
+            'clock_speed': f"{speed_mhz:.2f} MHz" if speed_mhz > 0 else "Unknown",
+            'family': family,
+            'stepping': stepping
+        }
+    except Exception as e:
+        logger.error(f"Failed to get macOS CPU info: {e}")
+        return {
+            'name': 'Unknown',
+            'manufacturer': 'Unknown',
+            'cores': 0,
+            'threads': 0,
+            'architecture': 'Unknown',
+            'clock_speed': 'Unknown',
+            'family': 'Unknown',
+            'stepping': 'Unknown'
+        }
+
 def get_gpu_info_windows():
     try:
         ps_cmd = ["powershell", "-Command", """
@@ -162,6 +223,65 @@ def get_gpu_info_linux():
     except Exception as e:
         logger.error(f"Failed to get Linux GPU info: {e}")
         return None
+
+def get_gpu_info_macos():
+    try:
+        # Run system_profiler to get GPU info
+        output = subprocess.check_output(['system_profiler', 'SPDisplaysDataType'], text=True)
+        
+        # Parse output to extract GPU info
+        gpu_info = []
+        
+        # Use regex to parse the system_profiler output
+        gpu_sections = re.findall(r'Chipset Model: (.*?)(?:Vendor|Model)', output, re.DOTALL)
+        
+        if not gpu_sections:
+            # Try alternative parsing if first approach fails
+            gpu_name_match = re.search(r'Chipset Model: (.+)', output)
+            if gpu_name_match:
+                gpu_name = gpu_name_match.group(1).strip()
+                
+                # Try to get VRAM
+                vram_match = re.search(r'VRAM \(Total\): (\d+) MB', output)
+                vram = int(vram_match.group(1)) if vram_match else 0
+                
+                # Determine vendor
+                if 'NVIDIA' in gpu_name:
+                    vendor = 'NVIDIA'
+                elif 'AMD' in gpu_name or 'ATI' in gpu_name:
+                    vendor = 'AMD'
+                elif 'Intel' in gpu_name:
+                    vendor = 'Intel'
+                elif 'Apple' in gpu_name:
+                    vendor = 'Apple'
+                else:
+                    vendor = 'Unknown'
+                    
+                gpu_info.append({
+                    'name': gpu_name,
+                    'vendor': vendor,
+                    'memory': f"{vram} MB" if vram > 0 else "Unknown",
+                    'driver_version': 'macOS Native'
+                })
+        
+        return {
+            'gpus': gpu_info if gpu_info else [{
+                'name': 'Unknown',
+                'vendor': 'Unknown',
+                'memory': 'Unknown',
+                'driver_version': 'Unknown'
+            }]
+        }
+    except Exception as e:
+        logger.error(f"Failed to get macOS GPU info: {e}")
+        return {
+            'gpus': [{
+                'name': 'Unknown',
+                'vendor': 'Unknown',
+                'memory': 'Unknown',
+                'driver_version': 'Unknown'
+            }]
+        }
 
 def get_system_ram_gb():
     try:
@@ -270,9 +390,19 @@ def get_system_info(resource_type=None):
 
         # Add the appropriate specs based on resource type
         if resource_type.upper() == "CPU":
-            resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
+            if is_windows():
+                resource["cpu_specs"] = get_cpu_info_windows()
+            elif is_macos():
+                resource["cpu_specs"] = get_cpu_info_macos()
+            else:
+                resource["cpu_specs"] = get_cpu_info_linux()
         elif resource_type.upper() == "GPU":
-            resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
+            if is_windows():
+                resource["gpu_specs"] = get_gpu_info_windows()
+            elif is_macos():
+                resource["gpu_specs"] = get_gpu_info_macos()
+            else:
+                resource["gpu_specs"] = get_gpu_info_linux()
 
         return {
             "location": location,
@@ -282,39 +412,6 @@ def get_system_info(resource_type=None):
         logger.error(f"Failed to gather system info: {e}")
         return None
 
-# def get_system_info(resource_type="CPU"):
-#     """Gather all system information according to the models."""
-#     try:
-#         location = get_location()
-#         resource_id = str(uuid.uuid4())
-#         ram = get_system_ram_gb()
-#         storage = get_storage_info()
-
-#         # Base resource without cpu_specs or gpu_specs
-#         resource = {
-#             "id": resource_id,
-#             "resource_type": resource_type.upper(),
-#             "location": location,
-#             "hourly_price": 0.0,
-#             "ram": ram,
-#             "storage": storage,
-#             "is_active": True
-#         }
-
-#         # Add the appropriate specs based on resource type
-#         if resource_type.upper() == "CPU":
-#             resource["cpu_specs"] = get_cpu_info_windows() if is_windows() else get_cpu_info_linux()
-#         elif resource_type.upper() == "GPU":
-#             resource["gpu_specs"] = get_gpu_info_windows() if is_windows() else get_gpu_info_linux()
-
-#         return {
-#             "location": location,
-#             "compute_resources": [resource]
-#         }
-#     except Exception as e:
-#         logger.error(f"Failed to gather system info: {e}")
-#         return None
-    
 def has_gpu():
     """Detect if system has a GPU."""
     try:
