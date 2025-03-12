@@ -118,15 +118,22 @@ def get_cpu_info_macos():
         threads = int(subprocess.check_output(['sysctl', '-n', 'hw.logicalcpu']).decode().strip())
         family = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.family']).decode().strip()
         stepping = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.stepping']).decode().strip()
+        model = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.model']).decode().strip()
         
         # Get CPU architecture
         arch_raw = subprocess.check_output(['uname', '-m']).decode().strip()
         if arch_raw == 'x86_64':
             architecture = '64-bit'
+            address_sizes = '48 bits physical, 64 bits virtual'
+            byte_order = 'Little Endian'
         elif arch_raw == 'arm64':
             architecture = 'ARM64'
+            address_sizes = '48 bits physical, 64 bits virtual'
+            byte_order = 'Little Endian'
         else:
             architecture = arch_raw
+            address_sizes = 'Unknown'
+            byte_order = 'Unknown'
             
         # Get CPU manufacturer
         if 'Intel' in cpu_model:
@@ -145,27 +152,42 @@ def get_cpu_info_macos():
             # Some older versions don't have this sysctl
             speed_mhz = 0
             
+        # Format in the same structure as Linux/Windows functions
         return {
-            'name': cpu_model,
-            'manufacturer': manufacturer,
-            'cores': cores,
-            'threads': threads,
-            'architecture': architecture,
-            'clock_speed': f"{speed_mhz:.2f} MHz" if speed_mhz > 0 else "Unknown",
-            'family': family,
-            'stepping': stepping
+            "op_modes": f"32-bit, 64-bit" if architecture == '64-bit' or architecture == 'ARM64' else architecture,
+            "address_sizes": address_sizes,
+            "byte_order": byte_order,
+            "total_cpus": threads,
+            "online_cpus": str(list(range(threads))),
+            "vendor_id": manufacturer,
+            "cpu_name": cpu_model,
+            "cpu_family": int(family) if family.isdigit() else 0,
+            "model": int(model) if model.isdigit() else 0,
+            "threads_per_core": threads // cores if cores > 0 else 0,
+            "cores_per_socket": cores,
+            "sockets": 1,
+            "stepping": int(stepping) if stepping.isdigit() else 0,
+            "cpu_max_mhz": speed_mhz,
+            "cpu_min_mhz": speed_mhz * 0.8 if speed_mhz > 0 else 0  # Estimate min frequency as 80% of max
         }
     except Exception as e:
         logger.error(f"Failed to get macOS CPU info: {e}")
         return {
-            'name': 'Unknown',
-            'manufacturer': 'Unknown',
-            'cores': 0,
-            'threads': 0,
-            'architecture': 'Unknown',
-            'clock_speed': 'Unknown',
-            'family': 'Unknown',
-            'stepping': 'Unknown'
+            "op_modes": "Unknown",
+            "address_sizes": "Unknown",
+            "byte_order": "Unknown",
+            "total_cpus": 0,
+            "online_cpus": "[]",
+            "vendor_id": "Unknown",
+            "cpu_name": "Unknown",
+            "cpu_family": 0,
+            "model": 0,
+            "threads_per_core": 0,
+            "cores_per_socket": 0,
+            "sockets": 0,
+            "stepping": 0,
+            "cpu_max_mhz": 0.0,
+            "cpu_min_mhz": 0.0
         }
 
 def get_gpu_info_windows():
@@ -331,6 +353,47 @@ def get_storage_info():
             total_bytes = psutil.disk_usage('/').total
             storage_info["capacity"] = f"{(total_bytes / (1024**3)):.2f}GB"
             
+        elif is_macos():
+            # For macOS, use diskutil to get storage info
+            try:
+                # Get the boot volume identifier
+                diskutil_list = subprocess.check_output(['diskutil', 'list'], text=True)
+                boot_disk = None
+                for line in diskutil_list.splitlines():
+                    if "disk" in line and "internal" in line.lower():
+                        boot_disk = line.split()[0]
+                        break
+                
+                if boot_disk:
+                    # Get info for the primary disk
+                    disk_info = subprocess.check_output(['diskutil', 'info', boot_disk], text=True)
+                    
+                    # Try to determine storage type
+                    if 'Solid State' in disk_info or 'SSD' in disk_info:
+                        if 'NVMe' in disk_info:
+                            storage_info["type"] = "NVME"
+                            storage_info["read_speed"] = "3500MB/s"
+                            storage_info["write_speed"] = "3000MB/s"
+                        else:
+                            storage_info["type"] = "SSD"
+                            storage_info["read_speed"] = "550MB/s"
+                            storage_info["write_speed"] = "520MB/s"
+                    else:
+                        storage_info["type"] = "HDD"
+                        storage_info["read_speed"] = "150MB/s"
+                        storage_info["write_speed"] = "100MB/s"
+                
+                # Use psutil to get total capacity
+                total_bytes = psutil.disk_usage('/').total
+                storage_info["capacity"] = f"{(total_bytes / (1024**3)):.2f}GB"
+            except Exception as e:
+                logger.warning(f"Failed to get detailed macOS storage info: {e}. Falling back to psutil.")
+                total_bytes = psutil.disk_usage('/').total
+                storage_info["capacity"] = f"{(total_bytes / (1024**3)):.2f}GB"
+                storage_info["type"] = "SSD"  # Default to SSD for modern Macs
+                storage_info["read_speed"] = "550MB/s"
+                storage_info["write_speed"] = "520MB/s"
+                
         elif is_linux():
             cmd = ["lsblk", "-d", "-o", "NAME,SIZE,ROTA,TRAN"]
             r = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -422,6 +485,16 @@ def has_gpu():
             """]
             r = subprocess.run(ps_cmd, capture_output=True, text=True, check=True)
             return json.loads(r.stdout)
+        elif is_macos():
+            # For macOS, check system_profiler output
+            try:
+                gpu_info = subprocess.check_output(['system_profiler', 'SPDisplaysDataType'], text=True)
+                # If we found a dedicated GPU, it's typically mentioned as such
+                if 'Chipset Model' in gpu_info:
+                    return True
+                return False
+            except:
+                return False
         else:
             # Try nvidia-smi first
             try:
