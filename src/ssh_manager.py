@@ -4,6 +4,9 @@ import os
 import platform
 import subprocess
 import time
+import re
+import tempfile
+import os
 from pathlib import Path
 
 from . import config, utils
@@ -13,6 +16,7 @@ class SSHManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.is_windows = platform.system().lower() == 'windows'
+        self.is_macos = platform.system().lower() == 'darwin'
         # Check if we're running as root
         self.is_root = os.geteuid() == 0 if not self.is_windows else False
         self.logger.info(f"Running as root: {self.is_root}")
@@ -46,6 +50,19 @@ class SSHManager:
         try:
             result = subprocess.run(
                 ['dpkg', '-s', 'openssh-server'],
+                capture_output=True,
+                text=True
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+            
+    def _check_macos_ssh_installed(self):
+        """Check if OpenSSH is already installed on macOS"""
+        try:
+            # On macOS, SSH is pre-installed, just check if the service file exists
+            result = subprocess.run(
+                ['ls', '/System/Library/LaunchDaemons/ssh.plist'],
                 capture_output=True,
                 text=True
             )
@@ -86,6 +103,23 @@ class SSHManager:
             except subprocess.CalledProcessError as e:
                 self.logger.error(f"Failed to install OpenSSH: {e}")
                 raise RuntimeError("Failed to install OpenSSH server") from e
+                
+    def _install_macos_ssh(self):
+        """Setup OpenSSH on macOS with error handling"""
+        try:
+            # On macOS, SSH is pre-installed, just need to ensure the service is enabled
+            self.logger.info("Enabling SSH service on macOS...")
+            subprocess.run(
+                ['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            # Create SSH directory if it doesn't exist
+            subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to enable SSH service on macOS: {e}")
+            raise RuntimeError("Failed to setup SSH server on macOS") from e
 
     def create_sshd_config(self, port):
         if self.is_windows:
@@ -99,6 +133,18 @@ PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 UsePAM yes
 Subsystem sftp sftp-server.exe
+"""
+        elif self.is_macos:
+            config_content = f"""
+# SSH Server Configuration
+Port {port}
+PermitRootLogin yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+Subsystem sftp /usr/libexec/sftp-server
 """
         else:
             config_content = f"""
@@ -132,7 +178,22 @@ Subsystem sftp /usr/lib/openssh/sftp-server
     def setup_server(self, port):
         """Setup SSH server with the specified port"""
         try:
-            # Create sshd_config with the port
+            if self.is_windows:
+                utils.run_elevated('powershell -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"')
+                utils.run_elevated('mkdir "C:\\ProgramData\\ssh" 2>NUL')
+            elif self.is_macos:
+                if not self._check_macos_ssh_installed():
+                    self._install_macos_ssh()
+                subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
+            else:
+                if not self._check_linux_ssh_installed():
+                    self._install_linux_ssh()
+                subprocess.run(['sudo', 'mkdir', '-p', '/etc/ssh'], check=True)
+            
+            # Stop the service
+            self.stop_server()
+            
+            # Create and copy new config
             self.create_sshd_config(port)
             
             # Start the service
@@ -140,6 +201,9 @@ Subsystem sftp /usr/lib/openssh/sftp-server
             
             if self.is_windows:
                 utils.run_elevated('powershell -Command "Set-Service -Name sshd -StartupType Automatic"')
+            elif self.is_macos:
+                # On macOS, we already enabled the service with launchctl load -w
+                pass
             else:
                 # Configure to start on boot based on available commands
                 if self.has_service_cmd and Path('/etc/init.d').exists():
@@ -213,6 +277,41 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     utils.run_elevated(cmd)
                     time.sleep(1)
             else:
+                # Set password using chpasswd for Linux or dscl for macOS
+                if self.is_macos:
+                    # On macOS, use dscl to set password
+                    try:
+                        # The dscl command requires the password as the last parameter, not passing it with path
+                        dscl_cmd = ['sudo', 'dscl', '.', '-passwd', f'/Users/{username}', password]
+                        self.logger.debug(f"Running dscl command: {dscl_cmd}")
+                        subprocess.run(
+                            dscl_cmd,
+                            check=True,
+                            capture_output=True,
+                            text=True
+                        )
+                    except subprocess.CalledProcessError as e:
+                        self.logger.warning(f"Failed to set password with dscl: {e}. Trying with passwd command.")
+                        # Alternative approach using the passwd command
+                        passwd_proc = subprocess.Popen(
+                            ['sudo', 'passwd', username],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True
+                        )
+                        # Pass the password twice (new password and confirmation)
+                        passwd_proc.communicate(input=f"{password}\n{password}\n")
+                else:
+                    # On Linux, use chpasswd
+                    chpasswd_proc = subprocess.Popen(
+                        ['sudo', 'chpasswd'],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    chpasswd_proc.communicate(input=f'{username}:{password}\n')
                 # Set password using chpasswd
                 chpasswd_proc = subprocess.Popen(
                     ['chpasswd'] if self.is_root else ['sudo', 'chpasswd'],
@@ -228,6 +327,26 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
                 
                 # Set ownership
+                if self.is_macos:
+                    # On macOS, we need to use the 'staff' group or get the user's primary group
+                    try:
+                        # Get the user's primary group
+                        group_result = subprocess.run(
+                            ['id', '-gn', username],
+                            capture_output=True,
+                            text=True
+                        )
+                        group_name = group_result.stdout.strip()
+                        if not group_name:
+                            group_name = 'staff'  # Default to 'staff' if we can't get the group
+                        
+                        subprocess.run(['sudo', 'chown', '-R', f'{username}:{group_name}', str(ssh_dir)], check=True)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to set ownership with primary group: {e}. Trying with 'staff' group.")
+                        subprocess.run(['sudo', 'chown', '-R', f'{username}:staff', str(ssh_dir)], check=True)
+                else:
+                    # On Linux
+                    subprocess.run(['sudo', 'chown', '-R', f'{username}:{username}', str(ssh_dir)], check=True)
                 cmd = ['chown', '-R', f'{username}:{username}', str(ssh_dir)]
                 if not self.is_root:
                     cmd.insert(0, 'sudo')
@@ -252,6 +371,8 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     text=True
                 )
                 stop_cmd.communicate(input='y\n')
+            elif self.is_macos:
+                subprocess.run(['sudo', 'launchctl', 'unload', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
             else:
                 # Try service command first
                 if self.has_service_cmd:
@@ -312,6 +433,8 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                     text=True
                 )
                 start_cmd.communicate(input='y\n')
+            elif self.is_macos:
+                subprocess.run(['sudo', 'launchctl', 'load', '-w', '/System/Library/LaunchDaemons/ssh.plist'], check=True)
             else:
                 # Try service command first
                 if self.has_service_cmd:
