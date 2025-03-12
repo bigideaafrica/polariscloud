@@ -62,7 +62,7 @@ def get_cpu_info_windows():
             "address_sizes": f"{cpu_info.get('AddressWidth')} bits",
             "byte_order": "Little Endian",
             "total_cpus": int(cpu_info.get("ThreadCount", 0)),
-            "online_cpus": str(list(range(int(cpu_info.get("ThreadCount", 0))))),
+            "online_cpus": f"0-{int(cpu_info.get('ThreadCount', 0))-1}" if int(cpu_info.get('ThreadCount', 0)) > 0 else "",
             "vendor_id": cpu_info.get("Manufacturer"),
             "cpu_name": cpu_info.get("Name"),
             "cpu_family": int(cpu_info.get("Family", 0)),
@@ -159,7 +159,7 @@ def get_cpu_info_macos():
             "address_sizes": address_sizes,
             "byte_order": byte_order,
             "total_cpus": threads,
-            "online_cpus": str(cpu_list),  # Format exactly like Windows version: "[0, 1, 2, 3, 4, ...]"
+            "online_cpus": f"0-{threads-1}" if threads > 0 else "",  # Format as "0-7" for 8 cores, as a string
             "vendor_id": manufacturer,
             "cpu_name": cpu_model,
             "cpu_family": int(family) if family.isdigit() else 0,
@@ -178,7 +178,7 @@ def get_cpu_info_macos():
             "address_sizes": "Unknown",
             "byte_order": "Unknown",
             "total_cpus": 0,
-            "online_cpus": "",
+            "online_cpus": "",  # Empty string instead of empty string
             "vendor_id": "Unknown",
             "cpu_name": "Unknown",
             "cpu_family": 0,
