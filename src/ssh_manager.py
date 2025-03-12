@@ -209,14 +209,28 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 # Set password using chpasswd for Linux or dscl for macOS
                 if self.is_macos:
                     # On macOS, use dscl to set password
-                    dscl_proc = subprocess.Popen(
-                        ['sudo', 'dscl', '.', '-passwd', f'/Users/{username}', password],
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
-                    )
-                    dscl_proc.communicate()
+                    try:
+                        # The dscl command requires the password as the last parameter, not passing it with path
+                        dscl_cmd = ['sudo', 'dscl', '.', '-passwd', f'/Users/{username}', password]
+                        self.logger.debug(f"Running dscl command: {dscl_cmd}")
+                        subprocess.run(
+                            dscl_cmd,
+                            check=True,
+                            capture_output=True,
+                            text=True
+                        )
+                    except subprocess.CalledProcessError as e:
+                        self.logger.warning(f"Failed to set password with dscl: {e}. Trying with passwd command.")
+                        # Alternative approach using the passwd command
+                        passwd_proc = subprocess.Popen(
+                            ['sudo', 'passwd', username],
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True
+                        )
+                        # Pass the password twice (new password and confirmation)
+                        passwd_proc.communicate(input=f"{password}\n{password}\n")
                 else:
                     # On Linux, use chpasswd
                     chpasswd_proc = subprocess.Popen(
@@ -233,7 +247,26 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
                 
                 # Set ownership
-                subprocess.run(['sudo', 'chown', '-R', f'{username}:{username}', str(ssh_dir)], check=True)
+                if self.is_macos:
+                    # On macOS, we need to use the 'staff' group or get the user's primary group
+                    try:
+                        # Get the user's primary group
+                        group_result = subprocess.run(
+                            ['id', '-gn', username],
+                            capture_output=True,
+                            text=True
+                        )
+                        group_name = group_result.stdout.strip()
+                        if not group_name:
+                            group_name = 'staff'  # Default to 'staff' if we can't get the group
+                        
+                        subprocess.run(['sudo', 'chown', '-R', f'{username}:{group_name}', str(ssh_dir)], check=True)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to set ownership with primary group: {e}. Trying with 'staff' group.")
+                        subprocess.run(['sudo', 'chown', '-R', f'{username}:staff', str(ssh_dir)], check=True)
+                else:
+                    # On Linux
+                    subprocess.run(['sudo', 'chown', '-R', f'{username}:{username}', str(ssh_dir)], check=True)
             
             self.logger.info("User configured successfully")
             return username, password
