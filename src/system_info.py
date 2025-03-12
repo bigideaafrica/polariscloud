@@ -153,12 +153,13 @@ def get_cpu_info_macos():
             speed_mhz = 0
             
         # Format in the same structure as Linux/Windows functions
+        cpu_list = list(range(threads))
         return {
             "op_modes": f"32-bit, 64-bit" if architecture == '64-bit' or architecture == 'ARM64' else architecture,
             "address_sizes": address_sizes,
             "byte_order": byte_order,
             "total_cpus": threads,
-            "online_cpus": str(list(range(threads))),
+            "online_cpus": str(cpu_list),  # Format exactly like Windows version: "[0, 1, 2, 3, 4, ...]"
             "vendor_id": manufacturer,
             "cpu_name": cpu_model,
             "cpu_family": int(family) if family.isdigit() else 0,
@@ -177,7 +178,7 @@ def get_cpu_info_macos():
             "address_sizes": "Unknown",
             "byte_order": "Unknown",
             "total_cpus": 0,
-            "online_cpus": "[]",
+            "online_cpus": "",
             "vendor_id": "Unknown",
             "cpu_name": "Unknown",
             "cpu_family": 0,
@@ -252,57 +253,36 @@ def get_gpu_info_macos():
         output = subprocess.check_output(['system_profiler', 'SPDisplaysDataType'], text=True)
         
         # Parse output to extract GPU info
-        gpu_info = []
+        gpu_name = "Unknown"
+        gpu_memory = "Unknown"
         
-        # Use regex to parse the system_profiler output
-        gpu_sections = re.findall(r'Chipset Model: (.*?)(?:Vendor|Model)', output, re.DOTALL)
+        # Try to find the GPU name
+        gpu_name_match = re.search(r'Chipset Model: (.+)', output)
+        if gpu_name_match:
+            gpu_name = gpu_name_match.group(1).strip()
+            
+        # Try to get VRAM
+        vram_match = re.search(r'VRAM \(.*\): (\d+).*MB', output)
+        if vram_match:
+            vram_mb = int(vram_match.group(1))
+            gpu_memory = f"{vram_mb / 1024:.2f}GB" if vram_mb >= 1024 else f"{vram_mb}MB"
         
-        if not gpu_sections:
-            # Try alternative parsing if first approach fails
-            gpu_name_match = re.search(r'Chipset Model: (.+)', output)
-            if gpu_name_match:
-                gpu_name = gpu_name_match.group(1).strip()
-                
-                # Try to get VRAM
-                vram_match = re.search(r'VRAM \(Total\): (\d+) MB', output)
-                vram = int(vram_match.group(1)) if vram_match else 0
-                
-                # Determine vendor
-                if 'NVIDIA' in gpu_name:
-                    vendor = 'NVIDIA'
-                elif 'AMD' in gpu_name or 'ATI' in gpu_name:
-                    vendor = 'AMD'
-                elif 'Intel' in gpu_name:
-                    vendor = 'Intel'
-                elif 'Apple' in gpu_name:
-                    vendor = 'Apple'
-                else:
-                    vendor = 'Unknown'
-                    
-                gpu_info.append({
-                    'name': gpu_name,
-                    'vendor': vendor,
-                    'memory': f"{vram} MB" if vram > 0 else "Unknown",
-                    'driver_version': 'macOS Native'
-                })
-        
+        # Format exactly like Windows/Linux versions
         return {
-            'gpus': gpu_info if gpu_info else [{
-                'name': 'Unknown',
-                'vendor': 'Unknown',
-                'memory': 'Unknown',
-                'driver_version': 'Unknown'
-            }]
+            "gpu_name": gpu_name,
+            "memory_size": gpu_memory,
+            "cuda_cores": None,
+            "clock_speed": None,
+            "power_consumption": None
         }
     except Exception as e:
         logger.error(f"Failed to get macOS GPU info: {e}")
         return {
-            'gpus': [{
-                'name': 'Unknown',
-                'vendor': 'Unknown',
-                'memory': 'Unknown',
-                'driver_version': 'Unknown'
-            }]
+            "gpu_name": "Unknown",
+            "memory_size": "Unknown",
+            "cuda_cores": None,
+            "clock_speed": None,
+            "power_consumption": None
         }
 
 def get_system_ram_gb():
