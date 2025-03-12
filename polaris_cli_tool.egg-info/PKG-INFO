@@ -4,7 +4,7 @@ Version: 1.0.7
 Summary: Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources
 Home-page: https://github.com/bigideainc/polaris-subnet
 Author: Polaris Team
-Author-email: fred@polariscloud.ai
+Author-email: help@polariscloud.ai
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent

@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
 from polaris_cli.network_handler import NetworkSelectionHandler, NetworkType
 from src.pid_manager import PID_FILE
@@ -93,39 +94,43 @@ def display_system_info(system_info: Dict[str, Any]) -> None:
 
 def submit_registration(submission: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        with spinner():
-            api_url = f'{server_url_}/miners/'
-            headers = {'Content-Type': 'application/json'}
-            response = requests.post(api_url, json=submission, headers=headers, timeout=10)
-            response.raise_for_status()
-            return response.json()
-    except requests.HTTPError as http_err:
+        console.print("[cyan]Connecting to registration server...[/cyan]")
+        api_url = f'{server_url_}/miners/'
+        headers = {'Content-Type': 'application/json'}
+        
+        # Log the request details
+        console.print(f"[cyan]Sending registration data to {api_url}...[/cyan]")
+        console.print(f"[dim cyan]Request Data (miner_id if available): {submission.get('miner_id', 'Not specified')}[/dim cyan]")
+        console.print(f"[dim cyan]Request Data (username/wallet): {submission.get('username', submission.get('wallet_name', 'Not specified'))}[/dim cyan]")
+        
+        response = requests.post(api_url, json=submission, headers=headers, timeout=10)
+        
+        # Log the response details
+        console.print(f"[cyan]Server response status: {response.status_code}[/cyan]")
         try:
-            error_details = response.json()
-            console.print(Panel(
-                f"[red]Registration failed: {error_details}[/red]",
-                title="Error",
-                border_style="red"
-            ))
-            logger.error(f"Registration failed: {json.dumps(error_details, indent=2)}")
-        except json.JSONDecodeError:
-            console.print(Panel(
-                f"[red]Registration failed: {http_err}[/red]",
-                title="Error",
-                border_style="red"
-            ))
-        sys.exit(1)
-    except requests.Timeout:
+            response_json = response.json()
+            console.print(f"[dim cyan]Response Data: {json.dumps(response_json, indent=2)}[/dim cyan]")
+            if 'miner_id' in response_json:
+                console.print(f"[green]Received miner_id from server: {response_json['miner_id']}[/green]")
+        except Exception:
+            console.print(f"[yellow]Response Text: {response.text}[/yellow]")
+        
+        response.raise_for_status()
+        
+        console.print("[green]Registration submitted successfully![/green]")
+        result = response.json()
+        return result
+    except requests.RequestException as e:
         console.print(Panel(
-            "[red]Request timed out while submitting registration.[/red]",
-            title="Timeout Error",
+            f"[red]Failed to connect to registration server: {str(e)}[/red]",
+            title="❌ Connection Error",
             border_style="red"
         ))
         sys.exit(1)
-    except Exception as err:
+    except Exception as e:
         console.print(Panel(
-            f"[red]An error occurred during registration: {err}[/red]",
-            title="Error",
+            f"[red]Registration failed: {str(e)}[/red]",
+            title="❌ Registration Error",
             border_style="red"
         ))
         sys.exit(1)
@@ -267,163 +272,166 @@ def process_ssh(ssh_str: str) -> str:
     raise ValueError(f"Invalid SSH format: {ssh_str}")
 
 def register_miner(skip_existing_check=False):
-    user_manager = UserManager()
-    if not skip_existing_check:
-        skip_registration, user_info = user_manager.check_existing_registration()
-        if skip_registration:
-            console.print("[yellow]Using existing registration.[/yellow]")
-            return
-
-    # Check if the user has an existing Commune key
-    has_commune_key = questionary.confirm("Do you have an existing Commune key?", default=True).ask()
-    if has_commune_key:
-        result_keys = subprocess.run(["comx", "key", "list"], capture_output=True, text=True)
-        if result_keys.returncode != 0 or not result_keys.stdout.strip():
-            console.print("[yellow]No existing keys found. You will need to create one.[/yellow]")
-            has_commune_key = False
-        else:
-            console.print(Panel(
-                f"Available keys:\n\n{result_keys.stdout}",
-                title="Your Commune Keys",
-                border_style="cyan"
-            ))
-            selected_key = Prompt.ask("Enter the name of the key you want to use")
-            if not selected_key:
-                console.print("[yellow]No key provided. You will need to create a new key.[/yellow]")
-                has_commune_key = False
-
-    # Create a new Commune key if needed
-    if not has_commune_key:
-        selected_key = Prompt.ask("Enter a name for your new Commune key")
-        create_result = subprocess.run(["comx", "key", "create", selected_key], capture_output=True, text=True)
-        if create_result.returncode != 0:
-            console.print(Panel(f"[red]Failed to create key: {create_result.stderr}[/red]", border_style="red"))
-            return
-        console.print(f"[green]Key {selected_key} created successfully.[/green]")
-
-    # Check Commune balance
-    balance, is_sufficient = check_commune_balance(selected_key, 10)
-    if not is_sufficient:
-        console.print(Panel(
-            f"[yellow]WARNING: Your current balance is {balance} COMAI.[/yellow]\n"
-            "[yellow]A minimum of 10 COMAI is recommended for registration.[/yellow]\n"
-            "[yellow]You may proceed, but some network features might be limited.[/yellow]",
-            title="⚠️ Low Balance Warning",
-            border_style="yellow"
-        ))
-
-    # Select network
-    console.print(Panel(
-        "Available networks:\n1. Mainnet (netuid=33)\n2. Testnet (netuid=12)",
-        title="Network Selection",
-        border_style="cyan"
-    ))
-    network_choice = Prompt.ask(
-        "Select network (enter 1 for Mainnet or 2 for Testnet)",
-        choices=["1", "2"],
-        default="1"
-    )
-    netuid = 33 if network_choice == "1" else 12
-    network_name = "Mainnet" if network_choice == "1" else "Testnet"
-    console.print(f"[green]Selected network: {network_name} (netuid={netuid})[/green]")
-
-    # Attempt Commune subnet registration
     try:
-        from communex.client import CommuneClient
-        from communex.compat.key import classic_load_key
-        key = classic_load_key(selected_key)
-        ss58_address = key.ss58_address
-        commune_node_url = "wss://api.communeai.net/"
-        client = CommuneClient(commune_node_url)
-        modules_keys = client.query_map_key(netuid)
-        commune_uid = next((uid for uid, address in modules_keys.items() if address == ss58_address), None)
-
-        if not commune_uid:
-            console.print(Panel(
-                f"[red]Failed to retrieve Commune UID for key '{selected_key}' on network {network_name} (netuid={netuid}).[/red]\n"
-                "[red]Key may not be registered on the Polaris subnet.[/red]\n\n"
-                "Registration process stopped.",
-                title="❌ Commune Registration Failed",
-                border_style="red"
-            ))
-            return  # Stop the process if Commune subnet registration fails
-
-        # Only proceed with username and system info if subnet registration is successful
-        username = Prompt.ask("Enter your desired username", default="")
-        if not username:
-            console.print(Panel(
-                "[red]Username is required for registration.[/red]",
-                title="Error",
-                border_style="red"
-            ))
-            return
-
-        # Load and display system info
-        system_info = load_system_info()
-        display_system_info(system_info)
-
-        # Prepare submission data
-        submission = {
-            "name": username,
-            "location": system_info.get("location", "N/A"),
-            "description": "Registered via Polaris CLI tool",
-            "compute_resources": []
-        }
-
-        # Process compute resources
-        compute_resources = system_info.get("compute_resources", [])
-        if isinstance(compute_resources, dict):
-            compute_resources = [compute_resources]
-        for resource in compute_resources:
-            try:
-                processed_resource = process_compute_resource(resource)
-                submission["compute_resources"].append(processed_resource)
-            except Exception as e:
-                console.print(Panel(
-                    f"[red]Error processing compute resource:[/red]\n{str(e)}",
-                    title="Error",
-                    border_style="red"
-                ))
+        from src.user_manager import UserManager
+        user_manager = UserManager()
+        if not skip_existing_check:
+            skip_registration, user_info = user_manager.check_existing_registration(show_prompt=True)
+            if skip_registration:
+                console.print("[yellow]Using existing registration.[/yellow]")
                 return
 
-        # Submit registration to your server
-        result = submit_registration(submission)
-        if not result.get('miner_id'):
-            console.print(Panel(
-                "[red]Compute registration failed. Unable to proceed with Commune registration.[/red]",
-                title="❌ Registration Error",
-                border_style="red"
-            ))
+        # Display welcome message and explanation
+        console.print(Panel(
+            "[bold cyan]Welcome to the Polaris Compute Subnet Registration![/bold cyan]\n\n"
+            "[cyan]This process will register your node as a Commune miner with the Polaris subnet.[/cyan]\n"
+            "[yellow]Please provide accurate information about your system to ensure proper registration.[/yellow]",
+            title="🌟 Polaris Miner Registration",
+            border_style="cyan"
+        ))
+        
+        # Load and display system information
+        console.print("[cyan]Loading system information...[/cyan]")
+        system_info = load_system_info()
+        if system_info:
+            display_system_info(system_info)
+        else:
+            console.print("[error]Failed to load system information.[/error]")
             return
 
-        miner_id = result['miner_id']
-        console.print(f"[green]Miner ID: {miner_id}[/green]")
+        # Validate compute resources (may exit if validation fails)
+        console.print("[cyan]Validating compute resources...[/cyan]")
+        validate_compute_resources(system_info.get('compute_resources', []))
+        console.print("[green]Compute resources validated successfully![/green]")
 
-        # Register with Commune network
-        commune_result = network_handler.register_commune_miner(
-            wallet_name=selected_key,
-            commune_uid=commune_uid,
-            wallet_address=ss58_address
-        )
-        if commune_result and commune_result.get('status') == 'success':
-            network_handler.verify_commune_status(miner_id)
-            console.print(Panel(
-                "[green]Successfully registered with Commune network![/green]",
-                title="🌐 Commune Registration Status",
-                border_style="green"
-            ))
+        # Get username input
+        username = questionary.text(
+            "Enter username:",
+            style=custom_style
+        ).ask()
+        
+        if not username or username.strip() == "":
+            console.print("[error]Username cannot be empty.[/error]")
+            return
+            
+        console.print(f"[green]Username set to: {username}[/green]")
+            
+        # Get commune key for registration
+        console.print("[cyan]Checking for commune key...[/cyan]")
+        commune_key = questionary.text(
+            "Enter commune key: (press enter to generate a new one)",
+            style=custom_style
+        ).ask()
+
+        if not commune_key or commune_key.strip() == "":
+            console.print("[cyan]Generating new commune key...[/cyan]")
+            try:
+                result = subprocess.run(['commune', 'key', 'new'], capture_output=True, text=True, check=True)
+                commune_key = result.stdout.strip()
+                console.print(f"[green]Generated new commune key: {commune_key}[/green]")
+            except Exception as e:
+                console.print(f"[error]Failed to generate commune key: {str(e)}[/error]")
+                return
         else:
-            console.print(Panel(
-                "[yellow]Warning: Compute network registration successful, but Commune network registration failed.[/yellow]",
-                title="⚠️ Partial Registration",
-                border_style="yellow"
-            ))
-    except Exception as e:
+            # Validate commune key
+            try:
+                if not commune_key.startswith("0x") or len(commune_key) != 66:
+                    console.print("[error]Invalid commune key format. Key should start with 0x and be 66 characters long.[/error]")
+                    return
+                console.print(f"[green]Using commune key: {commune_key}[/green]")
+                check_commune_balance(commune_key)
+            except Exception as e:
+                console.print(f"[error]Error validating commune key: {str(e)}[/error]")
+                return
+
+        # Display available networks
         console.print(Panel(
-            f"[red]An error occurred during Commune subnet registration: {str(e)}[/red]",
-            title="❌ Commune Registration Error",
-            border_style="red"
+            "[cyan]Network Selection[/cyan]\n"
+            "[yellow]Select the network your miner will connect to[/yellow]",
+            title="Network Setup",
+            border_style="cyan"
         ))
+        
+        networks = ['mainnet', 'testnet', 'devnet']
+        network = questionary.select(
+            "Select network:",
+            choices=networks,
+            style=custom_style
+        ).ask()
+        
+        if not network:
+            console.print("[error]No network selected. Exiting.[/error]")
+            return
+
+        console.print(f"[green]Selected network: {network}[/green]")
+
+        # Process the compute resources
+        console.print("[cyan]Processing compute resources...[/cyan]")
+        processed_resources = []
+        for resource in system_info.get('compute_resources', []):
+            processed_resource = process_compute_resource(resource)
+            if processed_resource:
+                processed_resources.append(processed_resource)
+
+        if not processed_resources:
+            console.print("[error]No valid compute resources found.[/error]")
+            return
+
+        console.print(f"[green]Processed {len(processed_resources)} compute resources successfully![/green]")
+
+        # Prepare registration data
+        console.print("[cyan]Preparing registration submission...[/cyan]")
+        submission = {
+            'username': username,
+            'commune_key': commune_key,
+            'network': network,
+            'compute_resources': processed_resources
+        }
+
+        # Submit registration
+        console.print("[cyan]Submitting registration to server...[/cyan]")
+        result = submit_registration(submission)
+
+        if result:
+            miner_id = result.get('miner_id', 'unknown')
+            display_registration_success(result)
+            
+            # Save user information
+            console.print("[cyan]Saving user information...[/cyan]")
+            # Extract network info from the first compute resource for simplicity
+            network_info = processed_resources[0].get('network', {})
+            user_manager.save_user_info(miner_id, commune_key, network_info)
+            console.print(f"[green]User information saved with Miner ID: {miner_id}[/green]")
+            
+            # Ask if user wants to start services
+            start_services = questionary.confirm(
+                "Do you want to start Polaris services now?",
+                style=custom_style
+            ).ask()
+            
+            if start_services:
+                console.print("[cyan]Starting Polaris services...[/cyan]")
+                
+                from .start import start_polaris, start_system
+                
+                if not start_system():
+                    console.print("[error]Failed to start system process.[/error]")
+                    return
+                    
+                if not start_polaris():
+                    console.print("[error]Failed to start API process.[/error]")
+                    from .start import stop_system
+                    stop_system()
+                    return
+                    
+                console.print("[success]Polaris services started successfully![/success]")
+        else:
+            console.print("[error]Registration failed. Please try again later.[/error]")
+
+    except Exception as e:
+        console.print(f"[error]Registration failed: {str(e)}[/error]")
+        import traceback
+        console.print(traceback.format_exc())
 
 def register_independent_miner(skip_existing_check=False):
     from rich import box
@@ -599,6 +607,156 @@ def validate_ram_format(ram_value: str, resource_id: str) -> None:
             border_style="red"
         ))
         sys.exit(1)
+
+def register_independent_miner_and_return_id(username=None, skip_existing_check=False):
+    """
+    Register an independent miner and return the miner ID.
+    
+    Args:
+        username (str, optional): Username to use for registration. If None, a unique one will be generated.
+        skip_existing_check (bool): Whether to skip checking for existing registration.
+        
+    Returns:
+        str: The miner ID if registration was successful, None otherwise.
+    """
+    from rich import box
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.prompt import Confirm, Prompt
+    import questionary
+    import socket
+    import requests
+    import uuid
+    import time
+    console = Console()
+    from src.user_manager import UserManager
+    user_manager = UserManager()
+    
+    # Check for existing registration if not skipping
+    if not skip_existing_check:
+        skip_registration, user_info = user_manager.check_existing_registration()
+        if skip_registration:
+            miner_id = user_info.get('miner_id', 'Unknown')
+            existing_username = user_info.get('username', 'Unknown')
+            console.print(Panel(
+                f"[yellow]Existing registration found:[/yellow]\n"
+                f"Miner ID: [bold cyan]{miner_id}[/bold cyan]\n"
+                f"Username: [bold cyan]{existing_username}[/bold cyan]",
+                title="⚠️ Existing Registration",
+                border_style="yellow"
+            ))
+            if not Confirm.ask("Do you want to proceed with a new registration?", default=False):
+                console.print("[yellow]Using existing registration.[/yellow]")
+                return miner_id
+    
+    console.print(Panel(
+        "[cyan]Independent Miner Registration[/cyan]\n"
+        "[yellow]You will register your miner and compute resources without joining any network.[/yellow]",
+        title="Independent Miner",
+        border_style="cyan"
+    ))
+    
+    system_info = load_system_info()
+    if system_info:
+        display_system_info(system_info)
+        if Confirm.ask("Do you want to proceed with registration?", default=True):
+            # Use provided username or generate a unique one
+            if not username:
+                # Generate a unique username if none provided
+                unique_id = str(uuid.uuid4())[:8]  # First 8 characters of a UUID
+                timestamp = int(time.time()) % 10000  # Last 4 digits of current timestamp
+                username = f"polaris-{timestamp}-{unique_id}"
+                console.print(f"[green]Generated unique username: {username}[/green]")
+            
+            if not username:
+                console.print("[error]Username is required for registration.[/error]")
+                return None
+                
+            location = system_info.get("location")
+            if not location:
+                try:
+                    response = requests.get('https://ipinfo.io/json', timeout=3)
+                    if response.status_code == 200:
+                        ip_data = response.json()
+                        if 'country' in ip_data and 'region' in ip_data:
+                            location = f"{ip_data['region']}, {ip_data['country']}"
+                        elif 'country' in ip_data:
+                            location = ip_data['country']
+                except:
+                    try:
+                        hostname = socket.gethostname()
+                        if hostname:
+                            location = f"Host: {hostname}"
+                    except:
+                        pass
+                        
+            if not location:
+                location = "Polaris HQ"
+                
+            submission = {
+                "name": username,
+                "location": location,
+                "description": "Independent Miner registered via Polaris CLI tool",
+                "compute_resources": [],
+                "registration_type": "independent"
+            }
+            
+            compute_resources = system_info.get("compute_resources", [])
+            if isinstance(compute_resources, dict):
+                compute_resources = [compute_resources]
+                
+            if not compute_resources:
+                console.print("[error]No compute resources found.[/error]")
+                return None
+                
+            for resource in compute_resources:
+                try:
+                    resource_copy = resource.copy() if isinstance(resource, dict) else {}
+                    if not resource_copy.get("location"):
+                        resource_copy["location"] = location
+                    processed_resource = process_compute_resource(resource_copy)
+                    submission["compute_resources"].append(processed_resource)
+                except Exception as e:
+                    console.print(Panel(
+                        f"[red]Error processing compute resource:[/red]\n{str(e)}",
+                        title="Error",
+                        border_style="red"
+                    ))
+                    return None
+                    
+            try:
+                result = submit_registration(submission)
+                if not result or not result.get('miner_id'):
+                    console.print("[error]Failed to register with server.[/error]")
+                    return None
+                    
+                miner_id = result.get('miner_id')
+                network_info = submission['compute_resources'][0]['network']
+                user_manager.save_user_info(miner_id, username, network_info)
+                
+                console.print(Panel(
+                    "[green]Independent miner registered successfully![/green]\n\n"
+                    f"Miner ID: [bold cyan]{miner_id}[/bold cyan]\n"
+                    f"Username: [bold cyan]{username}[/bold cyan]\n\n"
+                    "[yellow]Important: Save your Miner ID - you'll need it to manage your compute resources.[/yellow]\n"
+                    "[yellow]Note: As an independent miner, you are not connected to any network.[/yellow]",
+                    title="✅ Registration Complete",
+                    border_style="green"
+                ))
+                
+                # Return the miner ID instead of starting services
+                return miner_id
+                
+            except Exception as e:
+                console.print(Panel(
+                    f"[red]Error during registration: {str(e)}[/red]",
+                    title="Error",
+                    border_style="red"
+                ))
+                return None
+    else:
+        console.print("[error]Failed to load system information.[/error]")
+        return None
 
 if __name__ == "__main__":
     register_miner()

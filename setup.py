@@ -7,7 +7,7 @@ setup(
     version='1.0.7',
     description='Polaris CLI - Modern Development Workspace Manager for Distributed Compute Resources',
     author='Polaris Team',
-    author_email='fred@polariscloud.ai',
+    author_email='help@polariscloud.ai',
     url='https://github.com/bigideainc/polaris-subnet',
     packages=find_packages(),
     include_package_data=True,
