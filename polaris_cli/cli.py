@@ -700,7 +700,7 @@ def start():
             console.print("[error]Failed to start API process.[/error]")
             stop_system()
             return
-        console.print("[success]Commune miner processes started successfully![/success]")
+        console.print("[success]Miner processes started successfully![/success]")
         display_dashboard()
     else:
         console.print("[error]Unknown mode selected.[/error]")
@@ -714,7 +714,7 @@ def stop():
             console.print("[error]Failed to stop Bittensor miner.[/error]")
     else:
         if stop_polaris():
-            console.print("[success]Commune miner processes stopped successfully![/success]")
+            console.print("[success]Miner processes stopped successfully![/success]")
         else:
             console.print("[error]Failed to stop miner processes.[/error]")
 
