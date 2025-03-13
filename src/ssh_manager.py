@@ -312,15 +312,6 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                         text=True
                     )
                     chpasswd_proc.communicate(input=f'{username}:{password}\n')
-                # Set password using chpasswd
-                chpasswd_proc = subprocess.Popen(
-                    ['chpasswd'] if self.is_root else ['sudo', 'chpasswd'],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                chpasswd_proc.communicate(input=f'{username}:{password}\n')
                 
                 # Ensure .ssh directory exists with correct permissions
                 ssh_dir = Path.home() / '.ssh'
