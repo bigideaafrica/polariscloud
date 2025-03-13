@@ -1,12 +1,21 @@
 # polaris_cli/network_handler.py
-import json  # Added for JSON formatting in logs
+import argparse
+import datetime
+import getpass
+import json
 import logging
 import os
 import platform
+import random
+import re
+import string
+import subprocess
 import sys
+import threading
+import time
 from enum import Enum
 from time import sleep
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from communex.client import CommuneClient
@@ -26,6 +35,7 @@ from rich.spinner import Spinner
 from rich.style import Style
 from rich.table import Table
 from rich.text import Text
+from rich.syntax import Syntax
 
 if platform.system() == "Windows":
     import msvcrt
@@ -596,7 +606,7 @@ Thank you for joining us! 🌟
                 'network': network_name,
                 'netuid': netuid,
                 'wallet_address': wallet_address,
-                'subnet_uid': str(netuid),
+                'subnet_uid': str(netuid),  # Use str(netuid) as required by the API
                 'coldkey': actual_coldkey   # Will be actual SS58 coldkey address when available
             }
 
@@ -633,16 +643,71 @@ Thank you for joining us! 🌟
             
             if response.status_code == 200 or response.status_code == 201:
                 result = response.json()
-                logger.info(f"Registration response: {result}")
+                
+                # Log the full Bittensor response in a clearly formatted way
+                logger.info("========== BITTENSOR REGISTRATION RESPONSE BEGIN ==========")
+                try:
+                    # Format as pretty JSON if possible
+                    formatted_result = json.dumps(result, indent=2)
+                    logger.info(f"\n{formatted_result}")
+                except Exception as e:
+                    # Fall back to simple logging if JSON formatting fails
+                    logger.info(f"Raw response: {result}")
+                    logger.error(f"Error formatting response: {str(e)}")
+                logger.info("========== BITTENSOR REGISTRATION RESPONSE END ==========")
+                
+                # Also print to console for immediate visibility during registration
+                self.console.print("[bold cyan]Bittensor API Response:[/bold cyan]")
+                try:
+                    # Use Rich's syntax highlighting for JSON
+                    json_str = json.dumps(result, indent=2)
+                    syntax = Syntax(json_str, "json", theme="monokai", word_wrap=True)
+                    self.console.print(syntax)
+                except Exception as e:
+                    self.console.print(f"[dim]{result}[/dim]")
+                    logger.error(f"Error displaying JSON response: {str(e)}")
+                
+                # Extract and log the miner UID from the response
+                miner_uid = None
+                
+                # Try different possible locations for the miner UID in the response
+                if 'uid' in result:
+                    miner_uid = result.get('uid')
+                elif 'miner_uid' in result:
+                    miner_uid = result.get('miner_uid')
+                elif 'registration' in result and isinstance(result.get('registration'), dict):
+                    registration = result.get('registration', {})
+                    if 'uid' in registration:
+                        miner_uid = registration.get('uid')
+                    elif 'miner_uid' in registration:
+                        miner_uid = registration.get('miner_uid')
+                    elif 'miner_id' in registration:
+                        miner_uid = registration.get('miner_id')
+                
+                # Log the full response for debugging
+                logger.info(f"Full Bittensor registration response: {result}")
+                
+                if miner_uid:
+                    logger.info(f"Bittensor registration successful - Miner UID: {miner_uid}")
+                    self.console.print(f"[green]Miner UID from Bittensor response: {miner_uid}[/green]")
+                else:
+                    logger.warning("Could not find miner UID in Bittensor response")
+                    # Log keys in the response at top level
+                    logger.info(f"Response keys at top level: {list(result.keys())}")
+                    if 'registration' in result and isinstance(result.get('registration'), dict):
+                        logger.info(f"Registration keys: {list(result.get('registration').keys())}")
                 
                 if result.get('status') == 'success':
                     self.console.print(Panel(
                         f"[green]Successfully registered with Bittensor API![/green]\n"
                         f"[cyan]Miner ID: {miner_id}[/cyan]\n"
+                        f"[cyan]Miner UID: {miner_uid or 'Not found in response'}[/cyan]\n"
                         f"[cyan]Network: {network_name} (netuid {netuid})[/cyan]",
                         title="✅ Registration Successful",
                         border_style="green"
                     ))
+                    # Return both the result and the extracted miner UID
+                    result['miner_uid'] = miner_uid
                     return result
                 else:
                     # Display server-provided error message
