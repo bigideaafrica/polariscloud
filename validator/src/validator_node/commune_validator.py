@@ -107,7 +107,7 @@ class CommuneValidator(CoreValidator):
                 return
         
         try:
-            logger.info("Starting Commune validation cycle")
+            logger.info("Starting Miner program validation cycle")
             
             # Track miner containers to update miner_data
             await self.track_miner_containers()

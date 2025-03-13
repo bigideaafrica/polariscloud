@@ -692,7 +692,7 @@ def start():
             else:
                 console.print("[error]Failed to start Bittensor miner.[/error]")
     elif mode == 'miner':
-        console.print("\n[info]Starting Commune Miner...[/info]")
+        console.print("\n[info]Starting Miner program...[/info]")
         if not start_system():
             console.print("[error]Failed to start system process.[/error]")
             return
