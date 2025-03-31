@@ -228,7 +228,7 @@ It's best practice to use a Python virtual environment to isolate dependencies.
 
 ```bash
 # Create a virtual environment named 'venv'
-python3 -m venv venv
+python3.10 -m venv venv
 ```
 
 *Note:* If your system uses `python` instead of `python3`, adjust the command accordingly:
@@ -238,7 +238,7 @@ python -m venv venv
 
 #### Activate the Virtual Environment
 
-- **On macOS/Linux:**
+- **On macOS:**
   ```bash
   source venv/bin/activate
   ```
@@ -262,9 +262,6 @@ After installing the prerequisites, clone the Polaris repository and install it:
 git clone https://github.com/bigideainc/polaris-subnet.git
 cd polaris-subnet
 
-# Create and activate a virtual environment
-python3.10 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 ### 5. Configure SSH and Network Settings
