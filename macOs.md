@@ -112,13 +112,13 @@ sudo launchctl start com.openssh.sshd
 ---
 
 ### **Opening a Range of Ports in the macOS Firewall**
-To allow a range of ports (e.g., 2200-2300), modify the firewall rules:
+To allow a range of ports (e.g., 2200-4300), modify the firewall rules:
 ```sh
 sudo nano /etc/pf.conf
 ```
 Add this line:
 ```sh
-pass in proto tcp from any to any port 2200:2300
+pass in proto tcp from any to any port 2200:4300
 ```
 Save the file, then reload the firewall:
 ```sh
