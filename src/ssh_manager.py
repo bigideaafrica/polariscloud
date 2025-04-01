@@ -338,10 +338,12 @@ Subsystem sftp /usr/lib/openssh/sftp-server
                 else:
                     # On Linux
                     subprocess.run(['sudo', 'chown', '-R', f'{username}:{username}', str(ssh_dir)], check=True)
-                cmd = ['chown', '-R', f'{username}:{username}', str(ssh_dir)]
-                if not self.is_root:
-                    cmd.insert(0, 'sudo')
-                subprocess.run(cmd, check=True)
+                    # Apply additional Linux-specific ownership changes if needed
+                    if not self.is_macos:
+                        cmd = ['chown', '-R', f'{username}:{username}', str(ssh_dir)]
+                        if not self.is_root:
+                            cmd.insert(0, 'sudo')
+                        subprocess.run(cmd, check=True)
             
             self.logger.info("User configured successfully")
             return username, password
